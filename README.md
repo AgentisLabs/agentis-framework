@@ -9,7 +9,9 @@ Agentis is a powerful framework for building autonomous AI agents with advanced 
 - **Multi-Agent Swarms**: Create agent networks that can share information and collaborate
 - **Platform Connectors**: Easily connect agents to platforms like Discord and Twitter
 - **Personality & Role Management**: Control each agent's personality, role, lore, and goals
-- **Anthropic API Integration**: Built-in support for Anthropic's Claude models
+- **Multiple LLM Support**: Works with both Anthropic's Claude and OpenAI's GPT models
+- **Streaming Responses**: Support for real-time streaming of responses as they're generated
+- **Flexible Provider System**: Easy switching between different LLM providers
 
 ## Installation
 
@@ -18,6 +20,32 @@ npm install agentis
 ```
 
 ## Quick Start
+
+### Try the Showcase
+
+The easiest way to explore Agentis capabilities is to run our interactive showcase:
+
+```bash
+# Install dependencies
+npm install
+
+# Run the interactive showcase (demonstrates all features)
+npm run showcase
+
+# Try the simple chat agent with Claude
+npm run chat
+
+# Try the agent with OpenAI
+npm run openai
+```
+
+The showcase demonstrates:
+- Enhanced memory with semantic search
+- Hierarchical planning and execution
+- Tool usage for web search
+- Streaming responses in real-time
+
+### Basic Usage
 
 ```typescript
 import { Agent, Memory, AgentRole } from 'agentis';
@@ -85,6 +113,94 @@ discord.connect(swarm);
 ```
 
 ## Documentation
+
+### Model Providers
+
+Agentis supports multiple LLM providers:
+
+```typescript
+import { 
+  Agent, 
+  AgentRole, 
+  ProviderType, 
+  AnthropicProvider, 
+  OpenAIProvider 
+} from 'agentis';
+
+// Create an agent with Anthropic's Claude
+const claudeAgent = new Agent({
+  name: 'Claude Agent',
+  role: AgentRole.ASSISTANT
+}, undefined, {
+  type: ProviderType.ANTHROPIC,
+  model: 'claude-3-5-sonnet-20240620'
+});
+
+// Create an agent with OpenAI
+const openaiAgent = new Agent({
+  name: 'GPT Agent',
+  role: AgentRole.ASSISTANT
+}, undefined, {
+  type: ProviderType.OPENAI,
+  model: 'gpt-4o-mini'
+});
+
+// Alternatively, create providers directly
+const anthropicProvider = new AnthropicProvider({
+  model: 'claude-3-5-sonnet-20240620'
+});
+
+const openaiProvider = new OpenAIProvider({
+  model: 'gpt-4o'
+});
+
+// Then use with an agent
+const agent = new Agent({
+  name: 'Custom Agent',
+  role: AgentRole.ASSISTANT
+}, anthropicProvider);
+```
+
+Agentis will automatically select a provider based on available API keys if you don't specify one.
+
+### Streaming Responses
+
+Agentis supports streaming responses for a more interactive experience:
+
+```typescript
+import { Agent, AgentRole } from 'agentis';
+
+// Create the agent
+const agent = new Agent({
+  name: 'StreamingAgent',
+  role: AgentRole.ASSISTANT,
+  personality: {
+    traits: ['helpful', 'responsive'],
+    background: 'An AI assistant that streams responses'
+  }
+});
+
+// Use streaming mode
+await agent.run({
+  task: "Explain quantum computing in detail",
+  stream: true,
+  onStream: (text, done) => {
+    // text contains the accumulated response so far
+    // done is true when the response is complete
+    process.stdout.write(text.substring(currentText.length));
+    currentText = text;
+    
+    if (done) {
+      console.log('\nResponse complete!');
+    }
+  }
+});
+```
+
+Streaming is especially useful for:
+- Long responses where you want to show progress
+- Interactive applications requiring real-time feedback
+- Improving perceived response time for users
 
 ### Enhanced Memory System
 

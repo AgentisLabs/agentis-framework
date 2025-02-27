@@ -76,6 +76,8 @@ export interface RunOptions {
   conversation?: Conversation;
   maxTokens?: number;
   temperature?: number;
+  stream?: boolean;
+  onStream?: (text: string, done: boolean) => void;
 }
 
 /**

@@ -53,6 +53,7 @@ export interface PlanOptions {
   timeout?: number; // Overall timeout in milliseconds
   agents?: Agent[]; // Multiple agents for distributed task execution
   resourceConstraints?: Record<string, number>; // Resource limits
+  _skipPlanning?: boolean; // Internal flag to prevent recursion
 }
 
 /**

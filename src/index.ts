@@ -4,11 +4,21 @@
 // Core components
 export { Agent } from './core/agent';
 export { AgentSwarm } from './core/agent-swarm';
-export { LLMProvider } from './core/llm-provider';
 export { 
   AgentRole, 
   AgentEvent 
 } from './core/types';
+
+// Provider system
+export { 
+  ProviderType,
+  LLMProviderInterface,
+  GenerateOptions,
+  GenerateResult
+} from './core/provider-interface';
+export { AnthropicProvider } from './core/llm-provider';
+export { OpenAIProvider } from './core/openai-provider';
+export { ProviderFactory } from './core/provider-factory';
 
 // Memory
 export { MemoryInterface, MemoryEntry } from './memory/memory-interface';

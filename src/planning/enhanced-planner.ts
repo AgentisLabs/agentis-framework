@@ -35,13 +35,14 @@ export class EnhancedPlanner implements PlannerInterface {
    * @returns Promise resolving to the created plan
    */
   async createPlan(task: string, agent: Agent, options?: PlanOptions): Promise<Plan> {
-    const planOptions: Required<PlanOptions> = {
+    const planOptions = {
       strategy: PlanningStrategy.HIERARCHICAL,
       maxParallelTasks: 3,
       maxRetries: 2,
       timeout: 600000, // 10 minutes
       agents: [agent],
       resourceConstraints: {},
+      _skipPlanning: false,
       ...options
     };
     
@@ -72,7 +73,15 @@ export class EnhancedPlanner implements PlannerInterface {
   private async createSequentialPlan(
     task: string, 
     agent: Agent, 
-    planOptions: Required<PlanOptions>
+    planOptions: PlanOptions & {
+      strategy: PlanningStrategy;
+      maxParallelTasks: number;
+      maxRetries: number;
+      timeout: number;
+      agents: Agent[];
+      resourceConstraints: Record<string, number>;
+      _skipPlanning: boolean;
+    }
   ): Promise<Plan> {
     // Generate a planning prompt
     const planningPrompt = createPlanningPrompt(task, 'sequential');
@@ -136,7 +145,15 @@ export class EnhancedPlanner implements PlannerInterface {
   private async createParallelPlan(
     task: string, 
     agent: Agent, 
-    planOptions: Required<PlanOptions>
+    planOptions: PlanOptions & {
+      strategy: PlanningStrategy;
+      maxParallelTasks: number;
+      maxRetries: number;
+      timeout: number;
+      agents: Agent[];
+      resourceConstraints: Record<string, number>;
+      _skipPlanning: boolean;
+    }
   ): Promise<Plan> {
     // Generate a planning prompt
     const planningPrompt = createPlanningPrompt(task, 'parallel');
@@ -215,7 +232,15 @@ export class EnhancedPlanner implements PlannerInterface {
   private async createHierarchicalPlan(
     task: string, 
     agent: Agent, 
-    planOptions: Required<PlanOptions>
+    planOptions: PlanOptions & {
+      strategy: PlanningStrategy;
+      maxParallelTasks: number;
+      maxRetries: number;
+      timeout: number;
+      agents: Agent[];
+      resourceConstraints: Record<string, number>;
+      _skipPlanning: boolean;
+    }
   ): Promise<Plan> {
     // Generate a hierarchical planning prompt
     const planningPrompt = createHierarchicalPlanningPrompt(task);
@@ -263,7 +288,15 @@ export class EnhancedPlanner implements PlannerInterface {
   private async createAdaptivePlan(
     task: string, 
     agent: Agent, 
-    planOptions: Required<PlanOptions>
+    planOptions: PlanOptions & {
+      strategy: PlanningStrategy;
+      maxParallelTasks: number;
+      maxRetries: number;
+      timeout: number;
+      agents: Agent[];
+      resourceConstraints: Record<string, number>;
+      _skipPlanning: boolean;
+    }
   ): Promise<Plan> {
     // Start with a hierarchical plan
     const plan = await this.createHierarchicalPlan(task, agent, planOptions);

@@ -12,7 +12,8 @@ import {
 } from './types';
 import { MemoryInterface } from '../memory/memory-interface';
 import { EnhancedMemoryInterface } from '../memory/enhanced-memory-interface';
-import { LLMProvider } from './llm-provider';
+import { LLMProviderInterface } from './provider-interface';
+import { ProviderFactory, ProviderConfig } from './provider-factory';
 import { PlannerInterface } from '../planning/planner-interface';
 import { DefaultPlanner } from '../planning/default-planner';
 import { createSystemPrompt } from '../utils/prompt-utils';
@@ -25,7 +26,7 @@ export class Agent extends EventEmitter {
   id: string;
   config: AgentConfig;
   memory?: MemoryInterface | EnhancedMemoryInterface;
-  provider: LLMProvider;
+  provider: LLMProviderInterface;
   planner?: PlannerInterface;
   logger: Logger;
 
@@ -33,9 +34,14 @@ export class Agent extends EventEmitter {
    * Creates a new Agent instance
    * 
    * @param config - Configuration options for the agent
-   * @param provider - Optional LLM provider (defaults to Anthropic)
+   * @param provider - Optional LLM provider (uses ProviderFactory default if not provided)
+   * @param providerConfig - Optional provider configuration (if provider not directly provided)
    */
-  constructor(config: AgentConfig, provider?: LLMProvider) {
+  constructor(
+    config: AgentConfig, 
+    provider?: LLMProviderInterface,
+    providerConfig?: ProviderConfig
+  ) {
     super();
     this.id = uuidv4();
     this.config = {
@@ -43,10 +49,18 @@ export class Agent extends EventEmitter {
       systemPrompt: config.systemPrompt || this.generateDefaultSystemPrompt(config)
     };
     
-    // We'll implement the actual provider later
-    this.provider = provider || new LLMProvider({
-      model: config.model || process.env.DEFAULT_MODEL || "claude-3-5-sonnet-20240620"
-    });
+    // Use provided provider, or create one from config, or create default
+    if (provider) {
+      this.provider = provider;
+    } else if (providerConfig) {
+      this.provider = ProviderFactory.createProvider(providerConfig);
+    } else {
+      try {
+        this.provider = ProviderFactory.createDefaultProvider();
+      } catch (error) {
+        throw new Error(`Failed to create default provider: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
     
     this.logger = new Logger(`Agent:${config.name}`);
   }
@@ -100,13 +114,28 @@ export class Agent extends EventEmitter {
     }
 
     // Check if task needs planning
-    if (this.shouldUsePlanner(options.task) && this.planner) {
+    // Skip planning when options._skipPlanning is true to prevent infinite recursion
+    if (this.shouldUsePlanner(options.task) && this.planner && !(options as any)._skipPlanning) {
       this.emit(AgentEvent.THINKING, { message: 'Planning approach...' });
-      const plan = await this.planner.createPlan(options.task, this);
-      this.emit(AgentEvent.PLAN_CREATED, { plan });
       
-      // Execute the plan (this will be implemented in PlannerInterface implementations)
-      return await this.planner.executePlan(plan, this, options);
+      try {
+        // Add _skipPlanning flag to prevent recursion when planner calls agent.run()
+        const plan = await this.planner.createPlan(options.task, this, {
+          _skipPlanning: true
+        } as any);
+        
+        this.emit(AgentEvent.PLAN_CREATED, { plan });
+        
+        // Execute the plan with _skipPlanning flag
+        const planOptions = {
+          ...options,
+          _skipPlanning: true
+        };
+        return await this.planner.executePlan(plan, this, planOptions);
+      } catch (error) {
+        this.logger.error('Planning failed', error);
+        // Fall back to direct execution
+      }
     }
 
     // Retrieve relevant memories if memory is enabled
@@ -157,12 +186,47 @@ export class Agent extends EventEmitter {
     
     // Call the LLM with available tools
     this.emit(AgentEvent.THINKING, { message: 'Processing...' });
+    
+    // Log tools being passed to the model (for debugging)
+    if (options.tools && options.tools.length > 0) {
+      this.logger.debug('Passing tools to model:', options.tools.map(t => t.name));
+      this.emit(AgentEvent.THINKING, { message: `Available tools: ${options.tools.map(t => t.name).join(', ')}` });
+    } else {
+      this.logger.debug('No tools provided');
+      this.emit(AgentEvent.THINKING, { message: 'No tools available' });
+    }
+    
+    // Create a function to handle streaming responses
+    const handleStream = (text: string, done: boolean) => {
+      if (options.onStream) {
+        options.onStream(text, done);
+      }
+      
+      // Also emit a thinking event with partial response for any listeners
+      if (!done) {
+        this.emit(AgentEvent.THINKING, { message: `Generating: ${text.slice(-100)}...` });
+      }
+    };
+    
+    this.logger.debug('Calling provider.generateResponse with tools');
+    
     const result = await this.provider.generateResponse({
       messages: conversation.messages,
       tools: options.tools || [],
       maxTokens: options.maxTokens,
-      temperature: options.temperature
+      temperature: options.temperature,
+      stream: options.stream,
+      onPartialResponse: options.stream ? handleStream : undefined
     });
+    
+    // Log if tool calls were returned
+    if (result.toolCalls && result.toolCalls.length > 0) {
+      this.logger.debug(`Received ${result.toolCalls.length} tool calls from model`);
+      this.emit(AgentEvent.THINKING, { message: `Model requested ${result.toolCalls.length} tool calls` });
+    } else {
+      this.logger.debug('No tool calls received from model');
+      this.emit(AgentEvent.THINKING, { message: 'Model did not request any tool calls' });
+    }
     
     // Store the assistant's response
     const assistantMessage: Message = {
@@ -227,7 +291,11 @@ export class Agent extends EventEmitter {
             });
             
             this.logger.debug(`Executing tool: ${tc.name}`, tc.parameters);
+            this.emit(AgentEvent.THINKING, { message: `Executing tool: ${tc.name} with parameters: ${JSON.stringify(tc.parameters)}` });
+            
             const result = await tool.execute(tc.parameters);
+            this.logger.debug(`Tool execution result:`, result);
+            this.emit(AgentEvent.THINKING, { message: `Tool returned results (first result): ${result.results ? result.results[0]?.title : 'No results'}` });
             
             return {
               tool: tc.name,
@@ -258,9 +326,12 @@ export class Agent extends EventEmitter {
         conversation.messages.push(toolResultsMessage);
         
         // Call the LLM again with the tool results
+        this.logger.debug('Sending tool results back to LLM for final response');
+        this.emit(AgentEvent.THINKING, { message: 'Processing search results to generate response...' });
+        
         const followUpResult = await this.provider.generateResponse({
           messages: conversation.messages,
-          tools: options.tools || [],
+          tools: [], // No tools needed for the follow-up response
           maxTokens: options.maxTokens,
           temperature: options.temperature
         });
