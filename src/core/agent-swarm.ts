@@ -1,8 +1,8 @@
 import { EventEmitter } from 'events';
 import { v4 as uuidv4 } from 'uuid';
 import { Agent } from './agent';
-import { RunOptions, RunResult, AgentEvent, PlanningStrategy } from './types';
-import { PlannerInterface } from '../planning/planner-interface';
+import { RunOptions, RunResult, AgentEvent } from './types';
+import { PlannerInterface, PlanningStrategy } from '../planning/planner-interface';
 import { DefaultPlanner } from '../planning/default-planner';
 import { Logger } from '../utils/logger';
 import { createCollaborationPrompt } from '../utils/prompt-utils';
@@ -13,7 +13,7 @@ import { createCollaborationPrompt } from '../utils/prompt-utils';
 export interface AgentSwarmConfig {
   agents: Agent[];
   coordinator?: Agent;
-  planningStrategy?: PlanningStrategy;
+  planningStrategy?: 'sequential' | 'parallel' | 'hierarchical'; // Use string literals instead of enum
   maxConcurrentAgents?: number;
 }
 
@@ -49,7 +49,7 @@ export class AgentSwarm extends EventEmitter {
   id: string;
   private agents: Map<string, Agent> = new Map();
   private coordinator: Agent;
-  private planningStrategy: PlanningStrategy;
+  private planningStrategy: 'sequential' | 'parallel' | 'hierarchical';
   private maxConcurrentAgents: number;
   private logger: Logger;
   
@@ -82,7 +82,7 @@ export class AgentSwarm extends EventEmitter {
       });
     }
     
-    this.planningStrategy = config.planningStrategy || PlanningStrategy.SEQUENTIAL;
+    this.planningStrategy = config.planningStrategy || 'sequential';
     this.maxConcurrentAgents = config.maxConcurrentAgents || 3;
     this.logger = new Logger(`AgentSwarm:${this.id}`);
   }
@@ -154,13 +154,13 @@ export class AgentSwarm extends EventEmitter {
     let result: RunResult;
     
     switch (this.planningStrategy) {
-      case PlanningStrategy.PARALLEL:
+      case 'parallel':
         result = await this.executeParallel(plan, options);
         break;
-      case PlanningStrategy.HIERARCHICAL:
+      case 'hierarchical':
         result = await this.executeHierarchical(plan, options);
         break;
-      case PlanningStrategy.SEQUENTIAL:
+      case 'sequential':
       default:
         result = await this.executeSequential(plan, options);
         break;

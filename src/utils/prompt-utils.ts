@@ -53,16 +53,17 @@ ${goalsString}
  * Creates a task planning prompt for breaking down complex tasks
  * 
  * @param task - The complex task to break down
+ * @param strategy - The planning strategy to use
  * @returns A formatted planning prompt
  */
-export function createPlanningPrompt(task: string): string {
+export function createPlanningPrompt(task: string, strategy = 'sequential'): string {
   return `# Task Planning
   
 I need to break down the following complex task into manageable steps:
 
 "${task}"
 
-Please help me create a step-by-step plan by:
+Please help me create a ${strategy} plan by:
 
 1. Analyzing what the task requires
 2. Identifying the main components or stages
@@ -71,6 +72,93 @@ Please help me create a step-by-step plan by:
 5. Establishing dependencies between steps (what must happen before what)
 
 Please format your response as a structured plan with clear steps that I can follow.`;
+}
+
+/**
+ * Creates an enhanced hierarchical planning prompt
+ * 
+ * @param task - The complex task to break down
+ * @returns A formatted hierarchical planning prompt
+ */
+export function createHierarchicalPlanningPrompt(task: string): string {
+  return `# Hierarchical Task Planning
+
+I need to create a detailed hierarchical plan for the following complex task:
+
+"${task}"
+
+Please help me by creating a comprehensive plan with:
+
+1. Major phases of work (high-level tasks)
+2. For each phase, break it down into specific subtasks
+3. For complex subtasks, further decompose them into atomic actions
+4. Identify dependencies between tasks (what must be completed before other tasks)
+5. Indicate which tasks could be executed in parallel
+6. Estimate relative effort for each task (low/medium/high)
+7. Identify any specialized tools or resources needed for specific tasks
+
+Format your response with clear hierarchical structure using the following format:
+
+<phases>
+PHASE 1: [Name]
+- Description: [Brief description]
+- Estimated effort: [Low/Medium/High]
+
+  TASK 1.1: [Name]
+  - Description: [Detailed description]
+  - Dependencies: [List of task IDs that must be completed first, if any]
+  - Can run in parallel: [Yes/No]
+  - Tools needed: [List of tools or resources needed]
+  - Estimated effort: [Low/Medium/High]
+
+    SUBTASK 1.1.1: [Name]
+    - Description: [Atomic action description]
+    - Dependencies: [List of subtask IDs that must be completed first]
+    - Estimated effort: [Low/Medium/High]
+</phases>
+
+Ensure the plan is comprehensive enough to fully accomplish the task but broken down into manageable pieces.`;
+}
+
+/**
+ * Creates a planning prompt for adaptive replanning
+ * 
+ * @param originalTask - The original task
+ * @param plan - The current plan
+ * @param completedTasks - The tasks completed so far
+ * @param failedTasks - The tasks that failed
+ * @returns A formatted replanning prompt
+ */
+export function createReplanningPrompt(
+  originalTask: string, 
+  plan: string,
+  completedTasks: string, 
+  failedTasks: string
+): string {
+  return `# Adaptive Replanning
+
+I was working on the following task:
+
+"${originalTask}"
+
+My original plan was:
+${plan}
+
+So far, I've completed the following tasks:
+${completedTasks}
+
+However, the following tasks failed or encountered problems:
+${failedTasks}
+
+Given the current state and what we've learned so far, please help me revise my plan by:
+
+1. Analyzing what went wrong with the failed tasks
+2. Determining if we need to take a different approach
+3. Creating replacement tasks or alternative paths to achieve the goal
+4. Adjusting any dependencies in the remaining tasks
+5. Preserving what worked well in the original plan
+
+Provide a revised plan that builds on our progress while addressing the issues we encountered.`;
 }
 
 /**

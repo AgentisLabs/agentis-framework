@@ -4,7 +4,7 @@ Agentis is a powerful framework for building autonomous AI agents with advanced 
 
 ## Features
 
-- **Strong State & Memory**: Agents maintain persistent memory and can update their knowledge base
+- **Advanced Memory System**: Agents maintain short-term and long-term memory with semantic search capabilities
 - **Planning & Task Decomposition**: Break down complex tasks with planning and subtask creation
 - **Multi-Agent Swarms**: Create agent networks that can share information and collaborate
 - **Platform Connectors**: Easily connect agents to platforms like Discord and Twitter
@@ -86,7 +86,70 @@ discord.connect(swarm);
 
 ## Documentation
 
-For detailed documentation, visit [our documentation site](#).
+### Enhanced Memory System
+
+Agentis provides a sophisticated memory system with both short-term and long-term retention:
+
+```typescript
+import { 
+  EnhancedMemory, 
+  PineconeStore, 
+  Agent
+} from 'agentis';
+
+// Set up vector storage with Pinecone
+const vectorStore = new PineconeStore({
+  index: 'agentis-memory',
+  dimension: 1536, // OpenAI embeddings dimension
+  namespace: 'agent-namespace'
+});
+
+// Create enhanced memory with both short-term and long-term capabilities
+const memory = new EnhancedMemory(vectorStore, {
+  userId: 'user-123',
+  namespace: 'agent-namespace',
+  shortTermTTL: 24 * 60 * 60 * 1000, // 24 hours
+  embeddingModel: 'text-embedding-3-small'
+});
+
+// Initialize memory
+await memory.initialize();
+
+// Create agent with enhanced memory
+const agent = new Agent({
+  name: 'Memory Agent',
+  memory: memory
+});
+
+// Store memories
+await memory.storeShortTerm({
+  input: "What's your favorite color?",
+  output: "I like blue!",
+  timestamp: Date.now()
+});
+
+await memory.storeLongTerm({
+  input: "Tell me about quantum physics",
+  output: "Quantum physics studies the behavior of matter at subatomic scales...",
+  timestamp: Date.now(),
+  importance: 0.8
+});
+
+// Create agent notes
+await memory.saveNote({
+  title: "User Preferences",
+  content: "User seems interested in science topics",
+  tags: ["preferences", "science"],
+  importance: 0.9
+});
+
+// Search memory
+const results = await memory.retrieve("quantum physics");
+console.log(results.longTerm); // Most relevant memories
+console.log(results.notes);    // Relevant notes
+```
+
+For more detailed documentation, visit [our documentation site](#).
 
 ## Contributing
 

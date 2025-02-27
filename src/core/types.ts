@@ -79,13 +79,12 @@ export interface RunOptions {
 }
 
 /**
- * Planning strategies for breaking down complex tasks
+ * Note: Planning strategies have been moved to planning/planner-interface.ts
+ * This enum is kept for backward compatibility but will be deprecated
+ * in a future version.
  */
-export enum PlanningStrategy {
-  SEQUENTIAL = 'sequential',
-  PARALLEL = 'parallel',
-  HIERARCHICAL = 'hierarchical',
-}
+import { PlanningStrategy as PS } from '../planning/planner-interface';
+export const PlanningStrategy = PS;
 
 /**
  * The result of an agent execution

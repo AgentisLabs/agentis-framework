@@ -7,8 +7,7 @@ export { AgentSwarm } from './core/agent-swarm';
 export { LLMProvider } from './core/llm-provider';
 export { 
   AgentRole, 
-  AgentEvent, 
-  PlanningStrategy 
+  AgentEvent 
 } from './core/types';
 
 // Memory
@@ -34,9 +33,12 @@ export { PineconeStore, VectorStore } from './memory/pinecone-store';
 export { 
   PlannerInterface, 
   Plan, 
-  PlanTask 
+  PlanTask,
+  PlanOptions,
+  PlanningStrategy
 } from './planning/planner-interface';
 export { DefaultPlanner } from './planning/default-planner';
+export { EnhancedPlanner } from './planning/enhanced-planner';
 
 // Tools
 export { ToolRegistry } from './tools/tool-registry';

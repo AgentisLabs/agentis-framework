@@ -1,8 +1,14 @@
 import { v4 as uuidv4 } from 'uuid';
 import { Agent } from '../core/agent';
 import { RunOptions, RunResult, AgentEvent } from '../core/types';
-import { Plan, PlanTask, PlannerInterface } from './planner-interface';
-import { createPlanningPrompt } from '../utils/prompt-utils';
+import { 
+  Plan, 
+  PlanTask, 
+  PlannerInterface, 
+  PlanOptions, 
+  PlanningStrategy 
+} from './planner-interface';
+import { createPlanningPrompt, createReplanningPrompt } from '../utils/prompt-utils';
 import { Logger } from '../utils/logger';
 
 /**
@@ -20,9 +26,10 @@ export class DefaultPlanner implements PlannerInterface {
    * 
    * @param task - The complex task to plan for
    * @param agent - The agent creating the plan
+   * @param options - Optional planning configuration
    * @returns Promise resolving to the created plan
    */
-  async createPlan(task: string, agent: Agent): Promise<Plan> {
+  async createPlan(task: string, agent: Agent, options?: PlanOptions): Promise<Plan> {
     this.logger.debug('Creating plan', { task });
     
     // Generate a planning prompt
@@ -219,6 +226,83 @@ export class DefaultPlanner implements PlannerInterface {
     });
     
     return updatedPlan;
+  }
+  
+  /**
+   * Checks if a plan needs to be revised based on execution results
+   * 
+   * @param plan - The current plan
+   * @param agent - The agent executing the plan
+   * @returns Promise resolving to a boolean indicating if replanning is needed
+   */
+  async shouldReplan(plan: Plan, agent: Agent): Promise<boolean> {
+    // In the default planner, we only replan if the plan has failed
+    return plan.status === 'failed';
+  }
+  
+  /**
+   * Creates a revised plan based on execution results so far
+   * 
+   * @param originalPlan - The original plan that needs revision
+   * @param agent - The agent creating the revised plan
+   * @returns Promise resolving to the revised plan
+   */
+  async replan(originalPlan: Plan, agent: Agent): Promise<Plan> {
+    // Extract completed and failed tasks
+    const completedTasks = originalPlan.tasks.filter(t => t.status === 'completed');
+    const failedTasks = originalPlan.tasks.filter(t => t.status === 'failed');
+    
+    // Format tasks for the prompt
+    const completedTasksText = completedTasks.map(t => 
+      `- ${t.description} (Completed)`
+    ).join('\n');
+    
+    const failedTasksText = failedTasks.map(t => 
+      `- ${t.description} (Failed: ${t.error || 'Unknown error'})`
+    ).join('\n');
+    
+    // Create the original plan text
+    const planText = originalPlan.tasks.map(t => 
+      `- ${t.description}`
+    ).join('\n');
+    
+    // Create the replanning prompt
+    const replanPrompt = createReplanningPrompt(
+      originalPlan.originalTask,
+      planText,
+      completedTasksText,
+      failedTasksText
+    );
+    
+    // Ask the LLM to create a revised plan
+    const replanResult = await agent.run({
+      task: replanPrompt,
+    });
+    
+    // Parse the response into tasks
+    const taskDescriptions = this.parseTasksFromResponse(replanResult.response);
+    
+    // Create the revised plan
+    const revisedPlan: Plan = {
+      id: uuidv4(),
+      originalTask: originalPlan.originalTask,
+      tasks: taskDescriptions.map((description, index) => ({
+        id: uuidv4(),
+        description,
+        dependencies: index > 0 ? [taskDescriptions[index - 1]] : [], // Simple sequential dependencies
+        status: 'pending'
+      })),
+      created: Date.now(),
+      updated: Date.now(),
+      status: 'created'
+    };
+    
+    this.logger.info('Created revised plan', { 
+      originalPlanId: originalPlan.id,
+      newPlanId: revisedPlan.id
+    });
+    
+    return revisedPlan;
   }
   
   /**
