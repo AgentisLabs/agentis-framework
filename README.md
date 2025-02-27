@@ -12,6 +12,7 @@ Agentis is a powerful framework for building autonomous AI agents with advanced 
 - **Multiple LLM Support**: Works with both Anthropic's Claude and OpenAI's GPT models
 - **Streaming Responses**: Support for real-time streaming of responses as they're generated
 - **Flexible Provider System**: Easy switching between different LLM providers
+- **Multi-Provider Swarms**: Create specialized agent teams using different LLM providers working together
 
 ## Installation
 
@@ -37,6 +38,12 @@ npm run chat
 
 # Try the agent with OpenAI
 npm run openai
+
+# Try a multi-provider swarm with specialized agents
+npm run multi-provider
+
+# Run the enhanced multi-provider swarm
+npm run enhanced-swarm
 ```
 
 The showcase demonstrates:
@@ -44,6 +51,7 @@ The showcase demonstrates:
 - Hierarchical planning and execution
 - Tool usage for web search
 - Streaming responses in real-time
+- Multi-provider agent collaboration
 
 ### Basic Usage
 
@@ -72,6 +80,8 @@ await agent.run({
 ```
 
 ## Advanced Usage
+
+### Agent Swarms
 
 ```typescript
 import { 
@@ -110,6 +120,90 @@ const discord = new DiscordConnector({
 discord.connect(swarm);
 
 // The swarm is now available in your Discord server!
+```
+
+### Multi-Provider Agent Swarms
+
+```typescript
+import { 
+  Agent, 
+  AgentRole, 
+  ProviderType,
+  TavilySearchTool,
+  EnhancedAgentSwarm,
+  AgentSpecialization
+} from 'agentis';
+
+// Create a researcher agent using OpenAI with web search capability
+const researcherAgent = new Agent(
+  {
+    name: 'Researcher',
+    role: AgentRole.RESEARCHER,
+    personality: {
+      traits: ['thorough', 'internet-savvy'],
+      background: 'A specialized researcher with web search capabilities'
+    },
+    goals: ['Find accurate and current information']
+  },
+  undefined,
+  {
+    type: ProviderType.OPENAI,
+    model: 'gpt-4o' // Using GPT-4o for search capabilities
+  }
+);
+
+// Create an analyst agent using Claude for deep reasoning
+const analystAgent = new Agent(
+  {
+    name: 'Analyst',
+    role: AgentRole.ANALYST,
+    personality: {
+      traits: ['analytical', 'thoughtful', 'nuanced'],
+      background: 'A specialized analyst focused on deep reasoning and insight generation'
+    },
+    goals: ['Analyze information thoroughly', 'Generate insights']
+  },
+  undefined,
+  {
+    type: ProviderType.ANTHROPIC,
+    model: 'claude-3-5-sonnet-20240620' // Using Claude for nuanced analysis
+  }
+);
+
+// Define agent specializations
+const agentSpecializations = {
+  [researcherAgent.id]: {
+    name: 'Researcher',
+    description: 'Web search and information gathering specialist',
+    capabilities: ['web search', 'data collection'],
+    preferredTaskTypes: ['research', 'search'],
+    provider: ProviderType.OPENAI
+  },
+  [analystAgent.id]: {
+    name: 'Analyst',
+    description: 'Deep reasoning and analysis specialist',
+    capabilities: ['pattern recognition', 'critical thinking'],
+    preferredTaskTypes: ['analysis', 'evaluation'],
+    provider: ProviderType.ANTHROPIC
+  }
+};
+
+// Create enhanced multi-provider swarm
+const enhancedSwarm = new EnhancedAgentSwarm({
+  agents: [researcherAgent, analystAgent],
+  coordinator: new Agent({
+    name: 'Coordinator',
+    role: AgentRole.COORDINATOR
+  }),
+  agentSpecializations,
+  planningStrategy: 'parallel'
+});
+
+// Run the enhanced swarm
+const result = await enhancedSwarm.runEnhanced({
+  task: 'Research and analyze the latest renewable energy developments',
+  tools: [new TavilySearchTool()]
+});
 ```
 
 ## Documentation

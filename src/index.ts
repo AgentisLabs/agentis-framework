@@ -9,6 +9,16 @@ export {
   AgentEvent 
 } from './core/types';
 
+// Enhanced Agent Swarm System
+export { 
+  EnhancedAgentSwarm,
+  AgentSpecialization,
+  EnhancedAgentTask,
+  EnhancedSwarmPlan,
+  EnhancedAgentSwarmConfig,
+  AgentMessage
+} from './core/enhanced-agent-swarm';
+
 // Provider system
 export { 
   ProviderType,
