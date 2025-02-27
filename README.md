@@ -5,7 +5,7 @@ Agentis is a powerful framework for building autonomous AI agents with advanced 
 ## Features
 
 - **Advanced Memory System**: Agents maintain short-term and long-term memory with semantic search capabilities
-- **Planning & Task Decomposition**: Break down complex tasks with planning and subtask creation
+- **Planning & Task Decomposition**: Break down complex tasks with planning, subtask creation, and intelligent dependency inference
 - **Multi-Agent Swarms**: Create agent networks that can share information and collaborate
 - **Platform Connectors**: Easily connect agents to platforms like Discord and Twitter
 - **Personality & Role Management**: Control each agent's personality, role, lore, and goals
@@ -44,6 +44,9 @@ npm run multi-provider
 
 # Run the enhanced multi-provider swarm
 npm run enhanced-swarm
+
+# Try the dependency inference demo
+npm run dependency-demo
 ```
 
 The showcase demonstrates:
@@ -52,6 +55,7 @@ The showcase demonstrates:
 - Tool usage for web search
 - Streaming responses in real-time
 - Multi-provider agent collaboration
+- Advanced task dependency inference
 
 ### Basic Usage
 
@@ -358,6 +362,84 @@ const results = await memory.retrieve("quantum physics");
 console.log(results.longTerm); // Most relevant memories
 console.log(results.notes);    // Relevant notes
 ```
+
+### Advanced Task Dependency Inference
+
+Agentis includes a sophisticated dependency inference system that automatically detects relationships between tasks:
+
+```typescript
+import { 
+  DependencyInference, 
+  PlanTask, 
+  EnhancedPlanner 
+} from 'agentis';
+
+// Tasks with no dependencies defined yet
+const tasks: PlanTask[] = [
+  {
+    id: 'task1',
+    description: 'Research current market trends for smartphone apps',
+    dependencies: [],
+    status: 'pending'
+  },
+  {
+    id: 'task2',
+    description: 'Analyze competitor features and pricing models',
+    dependencies: [],
+    status: 'pending'
+  },
+  {
+    id: 'task3',
+    description: 'Create market positioning strategy based on research',
+    dependencies: [],
+    status: 'pending'
+  },
+  {
+    id: 'task4',
+    description: 'Draft the market analysis report with findings',
+    dependencies: [],
+    status: 'pending'
+  }
+];
+
+// Create inference system with options
+const dependencyInference = new DependencyInference({
+  enableContentSimilarity: true,
+  enableTypeHierarchy: true,
+  enableInformationFlow: true,
+  minDependencyCertainty: 0.6,
+  maxDependenciesPerTask: 3
+});
+
+// Optional natural language context that describes the plan
+const planDescription = `
+We need to create a market analysis report for a new smartphone app.
+First, we'll research current market trends, then analyze competitors.
+Using this research, we'll create a positioning strategy.
+Finally, we'll draft a comprehensive report with all our findings.
+`;
+
+// Automatically infer the dependencies
+const tasksWithDependencies = dependencyInference.inferDependencies(
+  tasks, 
+  planDescription
+);
+
+// Visualize the dependency graph
+console.log(dependencyInference.visualizeDependencyGraph(tasksWithDependencies));
+
+// Result: Tasks now have dependencies:
+// - "Create market positioning strategy" depends on "Research current market trends" and "Analyze competitor features"
+// - "Draft the market analysis report" depends on "Create market positioning strategy"
+
+// The analysis uses multiple techniques:
+// 1. Natural language processing of task descriptions
+// 2. Knowledge flow analysis (what information each task needs/produces)
+// 3. Task type hierarchy (research → analysis → writing)
+// 4. Content similarity between related tasks
+```
+
+This inference system is integrated into the EnhancedPlanner and EnhancedAgentSwarm classes, so it works automatically when creating plans or coordinating multi-agent swarms.
 
 For more detailed documentation, visit [our documentation site](#).
 

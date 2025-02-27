@@ -674,9 +674,61 @@ Focus on providing a clear, accurate, and well-structured answer to the original
   }
   
   /**
-   * Infer dependencies between tasks based on the response
+   * Infer dependencies between tasks based on the response using the advanced dependency system
    */
   private inferDependencies(tasks: EnhancedAgentTask[], response: string): void {
+    try {
+      // Import the DependencyInference system
+      // We need to require it here to avoid circular dependencies
+      const { DependencyInference } = require('../planning/dependency-inference');
+      
+      // Create an instance of the dependency inference system
+      const dependencyInference = new DependencyInference({
+        enableContentSimilarity: true,
+        enableTypeHierarchy: true,
+        enableInformationFlow: true,
+        minDependencyCertainty: 0.5,
+        maxDependenciesPerTask: 4
+      });
+      
+      // Convert enhanced tasks to regular plan tasks for the inference
+      const planTasks = tasks.map(enhancedTask => {
+        return {
+          id: enhancedTask.id,
+          description: enhancedTask.description,
+          dependencies: enhancedTask.dependencies,
+          status: enhancedTask.status as 'pending' | 'in_progress' | 'completed' | 'failed'
+        };
+      });
+      
+      // Run the advanced dependency inference
+      const updatedPlanTasks = dependencyInference.inferDependencies(planTasks, response);
+      
+      // Copy dependencies back to enhanced tasks
+      for (let i = 0; i < tasks.length; i++) {
+        const updatedTask = updatedPlanTasks.find(t => t.id === tasks[i].id);
+        if (updatedTask) {
+          tasks[i].dependencies = updatedTask.dependencies;
+        }
+      }
+      
+      // Log success
+      this.swarmLogger.info('Enhanced dependency inference completed', { 
+        taskCount: tasks.length,
+        dependencyCount: tasks.reduce((sum, task) => sum + task.dependencies.length, 0)
+      });
+      
+    } catch (error) {
+      // If there's any error with the new system, fall back to the basic implementation
+      this.swarmLogger.warn('Error in enhanced dependency inference, falling back to basic implementation', { error });
+      this.inferDependenciesBasic(tasks, response);
+    }
+  }
+  
+  /**
+   * Basic dependency inference as a fallback if the advanced system fails
+   */
+  private inferDependenciesBasic(tasks: EnhancedAgentTask[], response: string): void {
     // Look for explicit dependency mentions
     for (let i = 0; i < tasks.length; i++) {
       const task = tasks[i];

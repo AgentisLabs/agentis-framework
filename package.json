@@ -19,7 +19,8 @@
     "multi-provider": "ts-node -r tsconfig-paths/register examples/multi-provider-swarm.ts",
     "swarm": "ts-node -r tsconfig-paths/register examples/agent-swarm.ts",
     "enhanced-swarm": "ts-node -r tsconfig-paths/register examples/enhanced-multi-provider-swarm.ts",
-    "basic-swarm": "ts-node -r tsconfig-paths/register examples/enhanced-swarm-basic.ts"
+    "basic-swarm": "ts-node -r tsconfig-paths/register examples/enhanced-swarm-basic.ts",
+    "dependency-demo": "ts-node -r tsconfig-paths/register examples/dependency-inference-demo.ts"
   },
   "keywords": [
     "ai",

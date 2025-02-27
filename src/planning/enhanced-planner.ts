@@ -1037,12 +1037,47 @@ export class EnhancedPlanner implements PlannerInterface {
   }
   
   /**
-   * Parses dependencies from LLM response
+   * Parses dependencies from LLM response with advanced inference
    * 
    * @param response - The LLM's response about dependencies
    * @param tasks - The tasks to update with dependencies
    */
   private parseDependencies(response: string, tasks: PlanTask[]): void {
+    try {
+      // First try to use the advanced dependency inference system
+      // We need to require it here to avoid circular dependencies
+      const { DependencyInference } = require('./dependency-inference');
+      const dependencyInference = new DependencyInference();
+      
+      // Apply advanced dependency inference
+      const updatedTasks = dependencyInference.inferDependencies(tasks, response);
+      
+      // Copy the inferred dependencies back to the original tasks
+      for (let i = 0; i < tasks.length; i++) {
+        const updatedTask = updatedTasks.find(t => t.id === tasks[i].id);
+        if (updatedTask) {
+          tasks[i].dependencies = updatedTask.dependencies;
+        }
+      }
+      
+      this.logger.info('Enhanced dependency inference applied', {
+        taskCount: tasks.length,
+        dependencyCount: tasks.reduce((sum, task) => sum + task.dependencies.length, 0)
+      });
+    } catch (error) {
+      // Fall back to the basic implementation if the advanced one fails
+      this.logger.warn('Error in enhanced dependency inference, falling back to basic implementation', { error });
+      this.parseDependenciesBasic(response, tasks);
+    }
+  }
+  
+  /**
+   * Basic dependency parsing as a fallback
+   * 
+   * @param response - The LLM's response about dependencies
+   * @param tasks - The tasks to update with dependencies
+   */
+  private parseDependenciesBasic(response: string, tasks: PlanTask[]): void {
     // Look for lines like "Task X (task-id): [dep1, dep2, ...]"
     const lines = response.split('\n').map(line => line.trim());
     
