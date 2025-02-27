@@ -106,6 +106,15 @@ export class LLMProvider {
         description: tool.description,
         input_schema: tool.schema
       }));
+      
+      // Add type property to match Anthropic's expected format
+      tools = tools.map(tool => ({
+        ...tool,
+        input_schema: {
+          ...tool.input_schema,
+          type: tool.input_schema.type || 'object'
+        }
+      }));
     }
     
     try {
@@ -122,13 +131,25 @@ export class LLMProvider {
       });
       
       // Process tool calls if any
-      const toolCalls = response.content
-        .filter(item => item.type === 'tool_use')
-        .map(item => ({
-          name: (item as any).name,
-          parameters: (item as any).input,
-          // We'll fill in results later when tools are executed
-        }));
+      const toolCalls = [];
+      
+      // Check for tool_use type blocks
+      for (const item of response.content) {
+        if (item.type === 'tool_use') {
+          console.log('Found tool_use:', JSON.stringify(item, null, 2));
+          
+          try {
+            const toolUse = item as any;
+            toolCalls.push({
+              name: toolUse.name,
+              parameters: toolUse.input,
+              // We'll fill in results later when tools are executed
+            });
+          } catch (error) {
+            console.error('Error parsing tool call:', error);
+          }
+        }
+      }
       
       // Extract the text content
       const textBlocks = response.content

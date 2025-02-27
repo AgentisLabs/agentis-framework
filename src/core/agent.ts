@@ -154,12 +154,97 @@ export class Agent extends EventEmitter {
       });
     }
     
-    // Extract tool calls if any were made
-    const toolCalls = result.toolCalls ? result.toolCalls.map(tc => ({
-      tool: tc.name,
-      params: tc.parameters,
-      result: tc.result
-    })) : undefined;
+    // Execute tool calls if any were made
+    let toolCalls = undefined;
+    
+    if (result.toolCalls && result.toolCalls.length > 0) {
+      this.logger.debug('Tool calls detected', { count: result.toolCalls.length });
+      
+      // Get the tools mapped by name for easy lookup
+      const toolsMap = new Map();
+      (options.tools || []).forEach(tool => {
+        toolsMap.set(tool.name, tool);
+      });
+      
+      // Execute each tool call
+      const executedToolCalls = await Promise.all(
+        result.toolCalls.map(async (tc) => {
+          const tool = toolsMap.get(tc.name);
+          
+          if (!tool) {
+            this.logger.warn(`Tool not found: ${tc.name}`);
+            return {
+              tool: tc.name,
+              params: tc.parameters,
+              result: { error: `Tool not found: ${tc.name}` }
+            };
+          }
+          
+          try {
+            // Execute the tool
+            this.emit(AgentEvent.TOOL_CALL, { 
+              tool: tc.name, 
+              params: tc.parameters 
+            });
+            
+            this.logger.debug(`Executing tool: ${tc.name}`, tc.parameters);
+            const result = await tool.execute(tc.parameters);
+            
+            return {
+              tool: tc.name,
+              params: tc.parameters,
+              result
+            };
+          } catch (error) {
+            this.logger.error(`Error executing tool ${tc.name}`, error);
+            return {
+              tool: tc.name,
+              params: tc.parameters,
+              result: { error: error instanceof Error ? error.message : String(error) }
+            };
+          }
+        })
+      );
+      
+      toolCalls = executedToolCalls;
+      
+      // If we have tool calls, send their results back to the LLM
+      if (toolCalls.length > 0) {
+        const toolResultsMessage: Message = {
+          role: 'user',
+          content: `Tool results:\n${JSON.stringify(toolCalls, null, 2)}`,
+          timestamp: Date.now()
+        };
+        
+        conversation.messages.push(toolResultsMessage);
+        
+        // Call the LLM again with the tool results
+        const followUpResult = await this.provider.generateResponse({
+          messages: conversation.messages,
+          tools: options.tools || [],
+          maxTokens: options.maxTokens,
+          temperature: options.temperature
+        });
+        
+        // Update the assistant's response
+        const followUpMessage: Message = {
+          role: 'assistant',
+          content: followUpResult.message,
+          timestamp: Date.now()
+        };
+        
+        conversation.messages.push(followUpMessage);
+        conversation.updated = Date.now();
+        
+        // Update the final result
+        return {
+          response: followUpMessage.content,
+          conversation,
+          toolCalls,
+          tokens: result.tokens
+        };
+      }
+    }
     
     this.emit(AgentEvent.TASK_COMPLETE, { 
       task: options.task, 

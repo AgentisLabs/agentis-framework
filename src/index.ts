@@ -28,6 +28,7 @@ export { DefaultPlanner } from './planning/default-planner';
 // Tools
 export { ToolRegistry } from './tools/tool-registry';
 export { WebSearchTool } from './tools/web-search-tool';
+export { TavilySearchTool } from './tools/tavily-search-tool';
 export { WeatherTool } from './tools/weather-tool';
 
 // Platform Connectors
