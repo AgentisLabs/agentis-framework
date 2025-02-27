@@ -22,7 +22,8 @@
     "basic-swarm": "ts-node -r tsconfig-paths/register examples/enhanced-swarm-basic.ts",
     "dependency-demo": "ts-node -r tsconfig-paths/register examples/dependency-inference-demo.ts",
     "integrated-demo": "ts-node -r tsconfig-paths/register examples/integrated-showcase.ts",
-    "feedback-demo": "ts-node -r tsconfig-paths/register examples/feedback-demo.ts"
+    "feedback-demo": "ts-node -r tsconfig-paths/register examples/feedback-demo.ts",
+    "stock-research": "ts-node -r tsconfig-paths/register examples/stock-research-team.ts"
   },
   "keywords": [
     "ai",
