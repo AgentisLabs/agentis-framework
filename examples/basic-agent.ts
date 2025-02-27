@@ -1,5 +1,11 @@
 // Basic agent example
 import { Agent, AgentRole, InMemoryMemory, WebSearchTool } from '../src';
+import dotenv from 'dotenv';
+
+// Load environment variables from .env file
+dotenv.config();
+
+console.log('Checking for API key:', process.env.ANTHROPIC_API_KEY ? 'Found' : 'Not found');
 
 /**
  * This example demonstrates creating a basic agent with in-memory storage

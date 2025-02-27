@@ -62,8 +62,15 @@ export class LLMProvider {
       ...config
     };
     
+    // Make sure we have the API key from environment if not provided in config
+    const apiKey = config.apiKey || process.env.ANTHROPIC_API_KEY;
+    
+    if (!apiKey) {
+      throw new Error('Anthropic API key is required. Set it in the ANTHROPIC_API_KEY environment variable or pass it to the constructor.');
+    }
+    
     this.client = new Anthropic({
-      apiKey: config.apiKey || process.env.ANTHROPIC_API_KEY
+      apiKey: apiKey
     });
   }
   

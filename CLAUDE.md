@@ -7,6 +7,9 @@ This file contains helpful information about the Agentis framework codebase to a
 ### Build and Run
 
 ```bash
+# Install dependencies
+npm install
+
 # Build the project
 npm run build
 
@@ -18,19 +21,21 @@ npm start
 
 # Run a specific example
 npx ts-node -r tsconfig-paths/register examples/basic-agent.ts
+npx ts-node -r tsconfig-paths/register examples/agent-swarm.ts
+npx ts-node -r tsconfig-paths/register examples/discord-bot.ts
 ```
 
-### Testing and Linting
+### Environment Setup
 
-```bash
-# Run tests
-npm test
+Make sure to set up your environment variables in the `.env` file:
 
-# Run linting
-npm run lint
+```
+# Required
+ANTHROPIC_API_KEY=your_anthropic_api_key_here
 
-# Format code
-npm run format
+# Optional
+DEFAULT_MODEL=claude-3-5-sonnet-20240620
+LOG_LEVEL=info # debug, info, warn, error
 ```
 
 ## Project Structure

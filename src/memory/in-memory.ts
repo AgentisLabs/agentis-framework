@@ -56,10 +56,17 @@ export class InMemoryMemory implements MemoryInterface {
       // Count keyword occurrences in input and output
       let score = 0;
       for (const keyword of keywords) {
-        const inputMatches = (inputText.match(new RegExp(keyword, 'g')) || []).length;
-        const outputMatches = (outputText.match(new RegExp(keyword, 'g')) || []).length;
-        
-        score += inputMatches + outputMatches;
+        try {
+          // Escape special regex characters to avoid errors
+          const escapedKeyword = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const inputMatches = (inputText.match(new RegExp(escapedKeyword, 'g')) || []).length;
+          const outputMatches = (outputText.match(new RegExp(escapedKeyword, 'g')) || []).length;
+          score += inputMatches + outputMatches;
+        } catch (error) {
+          this.logger.warn(`Error matching keyword: ${keyword}`, error);
+          // Continue with other keywords
+          continue;
+        }
       }
       
       // Apply importance multiplier if set
