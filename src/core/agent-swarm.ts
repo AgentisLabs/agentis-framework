@@ -2,6 +2,7 @@ import { EventEmitter } from 'events';
 import { v4 as uuidv4 } from 'uuid';
 import { Agent } from './agent';
 import { RunOptions, RunResult, AgentEvent } from './types';
+import { FeedbackSystem } from './feedback-system';
 import { PlannerInterface, PlanningStrategy } from '../planning/planner-interface';
 import { DefaultPlanner } from '../planning/default-planner';
 import { Logger } from '../utils/logger';
@@ -15,6 +16,7 @@ export interface AgentSwarmConfig {
   coordinator?: Agent;
   planningStrategy?: 'sequential' | 'parallel' | 'hierarchical'; // Use string literals instead of enum
   maxConcurrentAgents?: number;
+  enableFeedback?: boolean;
 }
 
 /**
@@ -52,6 +54,7 @@ export class AgentSwarm extends EventEmitter {
   private planningStrategy: 'sequential' | 'parallel' | 'hierarchical';
   private maxConcurrentAgents: number;
   private logger: Logger;
+  private feedbackSystem?: FeedbackSystem; // Optional, only initialized if feedback is enabled
   
   /**
    * Creates a new agent swarm
@@ -66,6 +69,11 @@ export class AgentSwarm extends EventEmitter {
     config.agents.forEach(agent => {
       this.agents.set(agent.id, agent);
     });
+    
+    // Set up the feedback system if enabled
+    if (config.enableFeedback) {
+      this.feedbackSystem = new FeedbackSystem();
+    }
     
     // Set up the coordinator (create a default one if not provided)
     if (config.coordinator) {
@@ -462,6 +470,41 @@ export class AgentSwarm extends EventEmitter {
             'completed', 
             taskResult.result
           );
+          
+          // Request feedback if enabled
+          if (this.feedbackSystem && this.feedbackSystem.shouldRequestFeedback()) {
+            // Choose a different agent as evaluator (not the same agent that did the task)
+            const availableEvaluators = this.getAllAgents().filter(agent => 
+              agent.id !== taskResult.task.agentId && agent.id !== this.coordinator.id
+            );
+            
+            if (availableEvaluators.length > 0) {
+              // Choose a random evaluator
+              const evaluator = availableEvaluators[Math.floor(Math.random() * availableEvaluators.length)];
+              const producer = this.getAgent(taskResult.task.agentId)!;
+              
+              this.logger.info('Requesting feedback', { 
+                taskId: taskResult.task.id, 
+                producerId: producer.id,
+                evaluatorId: evaluator.id
+              });
+              
+              // Request feedback asynchronously (don't await)
+              this.feedbackSystem.requestFeedback(
+                taskResult.task.id,
+                taskResult.task.description,
+                taskResult.result || '',
+                producer,
+                evaluator
+              ).then(feedback => {
+                this.emit(AgentEvent.THINKING, { 
+                  message: `Received feedback from ${evaluator.config.name} on ${producer.config.name}'s work` 
+                });
+              }).catch(error => {
+                this.logger.error('Error requesting feedback', { taskId: taskResult.task.id, error });
+              });
+            }
+          }
         } else {
           // Update task status
           currentPlan = this.updateTaskStatus(

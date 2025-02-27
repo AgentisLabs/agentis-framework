@@ -706,7 +706,7 @@ Focus on providing a clear, accurate, and well-structured answer to the original
       
       // Copy dependencies back to enhanced tasks
       for (let i = 0; i < tasks.length; i++) {
-        const updatedTask = updatedPlanTasks.find(t => t.id === tasks[i].id);
+        const updatedTask = updatedPlanTasks.find((t: any) => t.id === tasks[i].id);
         if (updatedTask) {
           tasks[i].dependencies = updatedTask.dependencies;
         }
