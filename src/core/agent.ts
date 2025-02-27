@@ -11,6 +11,7 @@ import {
   Tool
 } from './types';
 import { MemoryInterface } from '../memory/memory-interface';
+import { EnhancedMemoryInterface } from '../memory/enhanced-memory-interface';
 import { LLMProvider } from './llm-provider';
 import { PlannerInterface } from '../planning/planner-interface';
 import { DefaultPlanner } from '../planning/default-planner';
@@ -23,7 +24,7 @@ import { Logger } from '../utils/logger';
 export class Agent extends EventEmitter {
   id: string;
   config: AgentConfig;
-  memory?: MemoryInterface;
+  memory?: MemoryInterface | EnhancedMemoryInterface;
   provider: LLMProvider;
   planner?: PlannerInterface;
   logger: Logger;
@@ -56,7 +57,7 @@ export class Agent extends EventEmitter {
    * @param memory - The memory implementation to use
    * @returns The agent instance (for chaining)
    */
-  setMemory(memory: MemoryInterface): Agent {
+  setMemory(memory: MemoryInterface | EnhancedMemoryInterface): Agent {
     this.memory = memory;
     return this;
   }
@@ -111,9 +112,37 @@ export class Agent extends EventEmitter {
     // Retrieve relevant memories if memory is enabled
     let context = '';
     if (this.memory) {
-      const memories = await this.memory.retrieve(options.task);
-      if (memories.length > 0) {
-        context = `Relevant information from your memory:\n${memories.join('\n')}`;
+      // Handle different memory interface types
+      if ('retrieve' in this.memory) {
+        // Basic memory interface
+        const memories = await this.memory.retrieve(options.task);
+        if (Array.isArray(memories) && memories.length > 0) {
+          context = `Relevant information from your memory:\n${memories.join('\n')}`;
+        }
+      } else {
+        // Enhanced memory interface
+        const memoryResult = await (this.memory as EnhancedMemoryInterface).retrieve(options.task);
+        
+        // Format short-term memories
+        if (memoryResult.shortTerm.length > 0) {
+          context += `Recent memories:\n${memoryResult.shortTerm.map(m => 
+            `- Q: ${m.input}\n  A: ${m.output}`
+          ).join('\n')}\n\n`;
+        }
+        
+        // Format long-term memories
+        if (memoryResult.longTerm.length > 0) {
+          context += `Long-term memories:\n${memoryResult.longTerm.map(m => 
+            `- Q: ${m.input}\n  A: ${m.output}`
+          ).join('\n')}\n\n`;
+        }
+        
+        // Format notes
+        if (memoryResult.notes.length > 0) {
+          context += `Notes:\n${memoryResult.notes.map(n => 
+            `- ${n.title}: ${n.content}`
+          ).join('\n')}\n\n`;
+        }
       }
     }
 
@@ -147,11 +176,21 @@ export class Agent extends EventEmitter {
     
     // Remember this interaction if memory is enabled
     if (this.memory) {
-      await this.memory.store({
-        input: userMessage.content,
-        output: assistantMessage.content,
-        timestamp: Date.now()
-      });
+      if ('store' in this.memory) {
+        // Basic memory interface
+        await this.memory.store({
+          input: userMessage.content,
+          output: assistantMessage.content,
+          timestamp: Date.now()
+        });
+      } else {
+        // Enhanced memory interface
+        await (this.memory as EnhancedMemoryInterface).storeShortTerm({
+          input: userMessage.content,
+          output: assistantMessage.content,
+          timestamp: Date.now()
+        });
+      }
     }
     
     // Execute tool calls if any were made

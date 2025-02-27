@@ -17,6 +17,19 @@ export { InMemoryMemory } from './memory/in-memory';
 export { PersistentMemory } from './memory/persistent-memory';
 export { VectorMemory } from './memory/vector-memory';
 
+// Enhanced memory system
+export { 
+  EnhancedMemoryInterface,
+  EnhancedMemoryConfig,
+  ShortTermMemory,
+  LongTermMemory,
+  AgentNote,
+  MemoryRetrievalResult
+} from './memory/enhanced-memory-interface';
+export { EnhancedMemory } from './memory/enhanced-memory';
+export { EmbeddingService, EmbeddingServiceConfig } from './memory/embedding-service';
+export { PineconeStore, VectorStore } from './memory/pinecone-store';
+
 // Planning
 export { 
   PlannerInterface, 

@@ -25,10 +25,12 @@
   "license": "MIT",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.37.0",
+    "@pinecone-database/pinecone": "^5.0.2",
     "@tavily/core": "^0.3.1",
     "@types/node": "^22.13.5",
     "axios": "^1.8.1",
     "dotenv": "^16.4.7",
+    "openai": "^4.85.4",
     "ts-node": "^10.9.2",
     "typescript": "^5.7.3",
     "uuid": "^11.1.0"
