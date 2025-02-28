@@ -9,15 +9,16 @@ import {
 } from '../src/core/enhanced-personality-system';
 import { AgentRole } from '../src/core/types';
 import { createInterface } from 'readline';
+import { OpenAIProvider } from '../src/core/openai-provider';
 
 // Load environment variables
 dotenv.config();
 
 // Configure logging
-const logger = new Logger('TwitterPersonalityAgent');
+const logger = new Logger('TwitterOpenAIAgent');
 
 // Check environment variables
-const requiredEnvVars = ['TWITTER_USERNAME', 'TWITTER_PASSWORD', 'ANTHROPIC_API_KEY'];
+const requiredEnvVars = ['TWITTER_USERNAME', 'TWITTER_PASSWORD', 'OPENAI_API_KEY'];
 for (const envVar of requiredEnvVars) {
   if (!process.env[envVar]) {
     logger.error(`Missing required environment variable: ${envVar}`);
@@ -37,18 +38,24 @@ process.argv.forEach((arg, index) => {
 logger.info(`Loading personality from ${personalityFile}`);
 const personality = PersonalityUtils.loadPersonalityFromJson(personalityFile);
 
+// Create OpenAI provider
+const openaiProvider = new OpenAIProvider({
+  model: process.env.OPENAI_MODEL || 'gpt-4',
+  apiKey: process.env.OPENAI_API_KEY
+});
+
 // Create an enhanced agent configuration
 const agentConfig: EnhancedAgentConfig = PersonalityUtils.createAgentConfig(
   'Astra', 
   personality, 
   AgentRole.ASSISTANT,
-  process.env.DEFAULT_MODEL || 'claude-3-5-sonnet-20240620'
+  process.env.OPENAI_MODEL || 'gpt-4'
 );
 
 // Generate system prompt from the enhanced personality
 const systemPrompt = PersonalityUtils.generateSystemPrompt(agentConfig);
 
-// Create the agent with our enhanced personality
+// Create the agent with our enhanced personality and OpenAI provider
 const agent = new Agent({
   name: agentConfig.name,
   role: agentConfig.role,
@@ -56,7 +63,7 @@ const agent = new Agent({
   goals: personality.motivation.goals.shortTermGoals,
   systemPrompt,
   model: agentConfig.model
-});
+}, openaiProvider);
 
 // Configure the Twitter connector
 const twitterConnector = new TwitterConnector({
@@ -92,6 +99,9 @@ const twitterConnector = new TwitterConnector({
   // Poll interval in milliseconds (default: 60000 = 1 minute)
   pollInterval: process.env.POLL_INTERVAL ? parseInt(process.env.POLL_INTERVAL) : 60000
 });
+
+// We'll create the readline interface later, inside the main function
+let rl: ReturnType<typeof createInterface>;
 
 // Event handlers for tweets
 twitterConnector.on('tweet', async (tweet) => {
@@ -129,7 +139,7 @@ twitterConnector.on('tweet', async (tweet) => {
         await twitterConnector.like(tweet.id);
         logger.info(`Liked tweet from @${tweet.author.username}`);
       }
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Error handling tweet', error);
     }
   }
@@ -166,17 +176,14 @@ twitterConnector.on('keyword_match', async (tweet) => {
     else {
       logger.info(`Decided not to engage with keyword match: ${result.response.substring(0, 100)}...`);
     }
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Error handling keyword match', error);
   }
 });
 
-// We'll create the readline interface later, inside the main function
-let rl: ReturnType<typeof createInterface>;
-
 // Prompt options
 function showPrompt() {
-  console.log('\nTwitter Agent - Commands:');
+  console.log('\nTwitter OpenAI Agent - Commands:');
   console.log('1: Post a tweet');
   console.log('2: Search tweets');
   console.log('3: Get trending topics');
@@ -255,8 +262,8 @@ async function postTweet() {
           }
           showPrompt();
         });
-      } catch (aiError) {
-        console.error('\nError generating tweet with AI:', aiError.message);
+      } catch (aiError: any) {
+        console.error('\nError generating tweet with AI:', aiError.message || 'Unknown error');
         console.log('This could be due to an issue with the API key or service availability.');
         
         // Fallback to manual tweet creation
@@ -642,6 +649,9 @@ function showAgentPersonality() {
   console.log('\nSample Tweet:');
   console.log(personality.content.preferences.platformStyle?.twitter?.typicalPosts?.[0] || "No sample tweets available");
   
+  console.log('\nUsing OpenAI Model:');
+  console.log(process.env.OPENAI_MODEL || 'gpt-4');
+  
   showPrompt();
 }
 
@@ -687,9 +697,10 @@ async function main() {
     await twitterConnector.connect(agent);
     console.log('Connected to Twitter successfully!');
     
-    console.log(`\n=== ${agentConfig.name} AI Twitter Agent ===`);
+    console.log(`\n=== ${agentConfig.name} OpenAI Twitter Agent ===`);
     console.log(`Personality: ${personality.persona.demographics?.occupation}`);
     console.log(`Connected as: ${process.env.TWITTER_USERNAME}`);
+    console.log(`Using OpenAI model: ${process.env.OPENAI_MODEL || 'gpt-4'}`);
     console.log(`Monitoring: ${twitterConnector.config.monitorKeywords?.length || 0} keywords, ${twitterConnector.config.monitorUsers?.length || 0} users`);
     console.log(`Personality file: ${personalityFile}`);
     
