@@ -60,7 +60,7 @@ type GrokResponse = {
  * Uses agent-twitter-client to connect to Twitter without requiring API keys
  */
 export class TwitterConnector extends EventEmitter {
-  private config: TwitterConnectorConfig;
+  public config: TwitterConnectorConfig;
   private agent?: Agent;
   private swarm?: AgentSwarm;
   private logger: Logger;

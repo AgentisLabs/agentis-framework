@@ -38,8 +38,7 @@ const agent = new Agent({
     voice: 'professional, supportive'
   },
   goals: ['Create rich, detailed agent personas', 'Maintain internal consistency'],
-  model: process.env.DEFAULT_MODEL || 'claude-3-5-sonnet-20240620',
-  apiKey: process.env.ANTHROPIC_API_KEY
+  model: process.env.DEFAULT_MODEL || 'claude-3-5-sonnet-20240620'
 });
 
 interface PersonaDefinition {

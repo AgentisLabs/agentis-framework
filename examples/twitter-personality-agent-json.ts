@@ -55,8 +55,7 @@ const agent = new Agent({
   personality: PersonalityUtils.simplifyPersonality(personality),
   goals: personality.motivation.goals.shortTermGoals,
   systemPrompt,
-  model: agentConfig.model,
-  apiKey: process.env.ANTHROPIC_API_KEY
+  model: agentConfig.model
 });
 
 // Configure the Twitter connector
