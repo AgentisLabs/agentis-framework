@@ -1,11 +1,13 @@
 import dotenv from 'dotenv';
 import path from 'path';
+import fs from 'fs';
 import { Agent } from '../src/core/agent';
 import { TwitterConnector } from '../src/platform-connectors/twitter-connector';
 import { Logger } from '../src/utils/logger';
 import { 
   PersonalityUtils, 
-  EnhancedAgentConfig 
+  EnhancedAgentConfig,
+  EnhancedPersonality
 } from '../src/core/enhanced-personality-system';
 import { AgentRole } from '../src/core/types';
 import { createInterface } from 'readline';
@@ -25,21 +27,51 @@ for (const envVar of requiredEnvVars) {
   }
 }
 
-// Parse command line arguments to get personality file
-let personalityFile = path.join(__dirname, '../personas/astra.json');
-process.argv.forEach((arg, index) => {
-  if (arg === '--persona' && process.argv[index + 1]) {
-    personalityFile = process.argv[index + 1];
-  }
-});
+// Set default personality to wexley.json for testing purposes
+let personalityFile = path.join(__dirname, '../personas/wexley.json');
 
-// Load personality from JSON file
+// Log all arguments to debug the issue
+logger.debug('Command line arguments:', process.argv);
+
+// Process command line arguments
+if (process.argv.length >= 3) {
+  // First check for --persona flag
+  for (let i = 0; i < process.argv.length - 1; i++) {
+    if (process.argv[i] === '--persona') {
+      personalityFile = process.argv[i + 1];
+      logger.info(`Using personality file from --persona flag: ${personalityFile}`);
+      break;
+    }
+  }
+  
+  // Also check the last argument in case it's a direct path (useful for debugging)
+  const lastArg = process.argv[process.argv.length - 1];
+  if (lastArg.endsWith('.json') && lastArg !== path.basename(personalityFile)) {
+    personalityFile = lastArg;
+    logger.info(`Using personality file from last argument: ${personalityFile}`);
+  }
+}
+
+// Make sure the file exists before trying to load it
+if (!fs.existsSync(personalityFile)) {
+  logger.warn(`Persona file not found: ${personalityFile}, falling back to default`);
+  personalityFile = path.join(__dirname, '../personas/wexley.json');
+  
+  // If even the default doesn't exist, try astra as a last resort
+  if (!fs.existsSync(personalityFile)) {
+    logger.warn(`Default persona also not found, trying astra.json`);
+    personalityFile = path.join(__dirname, '../personas/astra.json');
+  }
+}
+
 logger.info(`Loading personality from ${personalityFile}`);
 const personality = PersonalityUtils.loadPersonalityFromJson(personalityFile);
 
 // Create an enhanced agent configuration
+// Use the persona name from the personality file instead of hardcoding "Astra"
+const personaName = personality.persona?.name || path.basename(personalityFile, '.json');
 const agentConfig: EnhancedAgentConfig = PersonalityUtils.createAgentConfig(
-  'Astra', 
+  personaName, 
   personality, 
   AgentRole.ASSISTANT,
   process.env.DEFAULT_MODEL || 'claude-3-5-sonnet-20240620'
@@ -172,7 +204,7 @@ twitterConnector.on('keyword_match', async (tweet) => {
 });
 
 // We'll create the readline interface later, inside the main function
-let rl: ReturnType<typeof createInterface>;
+let rl: ReturnType<typeof createInterface> | null;
 
 // Prompt options
 function showPrompt() {
@@ -186,7 +218,13 @@ function showPrompt() {
   console.log('7: Show agent personality summary');
   console.log('8: Save personality to a new JSON file');
   console.log('9: Exit');
-  rl.question('\nEnter command number: ', handleCommand);
+  
+  if (rl) {
+    safeQuestion('\nEnter command number: ', handleCommand);
+  } else {
+    console.error('Error: Readline interface not initialized.');
+    process.exit(1);
+  }
 }
 
 // Command handler
@@ -231,9 +269,19 @@ async function handleCommand(input: string) {
   }
 }
 
+// Helper function to safely use readline
+function safeQuestion(prompt: string, callback: (answer: string) => void): void {
+  if (!rl) {
+    console.error('Error: Readline interface not initialized');
+    process.exit(1);
+    return;
+  }
+  rl.question(prompt, callback);
+}
+
 // Command implementations
 async function postTweet() {
-  rl.question('Enter topic or news to tweet about: ', async (topic) => {
+  safeQuestion('Enter topic or news to tweet about: ', async (topic) => {
     try {
       try {
         const result = await agent.run({
@@ -246,7 +294,7 @@ async function postTweet() {
         console.log('\nDraft tweet:');
         console.log(result.response);
         
-        rl.question('Post this tweet? (yes/no): ', async (answer) => {
+        safeQuestion('Post this tweet? (yes/no): ', async (answer) => {
           if (answer.toLowerCase() === 'yes' || answer.toLowerCase() === 'y') {
             const tweetId = await twitterConnector.tweet(result.response);
             console.log(`Tweet posted successfully! ID: ${tweetId}`);
@@ -255,15 +303,15 @@ async function postTweet() {
           }
           showPrompt();
         });
-      } catch (aiError) {
-        console.error('\nError generating tweet with AI:', aiError.message);
+      } catch (aiError: any) {
+        console.error('\nError generating tweet with AI:', aiError?.message || 'Unknown error');
         console.log('This could be due to an issue with the API key or service availability.');
         
         // Fallback to manual tweet creation
         console.log('\nYou can still create a tweet manually:');
-        rl.question('Enter your tweet (max 280 characters): ', async (manualTweet) => {
+        safeQuestion('Enter your tweet (max 280 characters): ', async (manualTweet) => {
           if (manualTweet.trim()) {
-            rl.question('Post this tweet? (yes/no): ', async (answer) => {
+            safeQuestion('Post this tweet? (yes/no): ', async (answer) => {
               if (answer.toLowerCase() === 'yes' || answer.toLowerCase() === 'y') {
                 const tweetId = await twitterConnector.tweet(manualTweet);
                 console.log(`Tweet posted successfully! ID: ${tweetId}`);
@@ -286,7 +334,7 @@ async function postTweet() {
 }
 
 async function searchTweets() {
-  rl.question('Enter search query: ', async (query) => {
+  safeQuestion('Enter search query: ', async (query) => {
     try {
       const tweets = await twitterConnector.searchTweets(query, 5);
       
@@ -296,18 +344,18 @@ async function searchTweets() {
       });
       
       if (tweets.length > 0) {
-        rl.question('\nEnter tweet number to engage with (or 0 to skip): ', async (answer) => {
+        safeQuestion('\nEnter tweet number to engage with (or 0 to skip): ', async (answer) => {
           const tweetIndex = parseInt(answer) - 1;
           if (tweetIndex >= 0 && tweetIndex < tweets.length) {
             const selectedTweet = tweets[tweetIndex];
             
-            rl.question('Like this tweet? (yes/no): ', async (likeAnswer) => {
+            safeQuestion('Like this tweet? (yes/no): ', async (likeAnswer) => {
               if (likeAnswer.toLowerCase() === 'yes' || likeAnswer.toLowerCase() === 'y') {
                 await twitterConnector.like(selectedTweet.id);
                 console.log('Tweet liked!');
               }
               
-              rl.question('Reply to this tweet? (yes/no): ', async (replyAnswer) => {
+              safeQuestion('Reply to this tweet? (yes/no): ', async (replyAnswer) => {
                 if (replyAnswer.toLowerCase() === 'yes' || replyAnswer.toLowerCase() === 'y') {
                   try {
                     const result = await agent.run({
@@ -318,7 +366,7 @@ async function searchTweets() {
                     
                     console.log(`\nDraft reply: ${result.response}`);
                     
-                    rl.question('Send this reply? (yes/no): ', async (sendAnswer) => {
+                    safeQuestion('Send this reply? (yes/no): ', async (sendAnswer) => {
                       if (sendAnswer.toLowerCase() === 'yes' || sendAnswer.toLowerCase() === 'y') {
                         await twitterConnector.tweet(result.response, selectedTweet.id);
                         console.log('Reply sent!');
@@ -333,9 +381,9 @@ async function searchTweets() {
                     
                     // Fallback to manual reply
                     console.log('\nYou can still create a reply manually:');
-                    rl.question('Enter your reply (max 280 characters): ', async (manualReply) => {
+                    safeQuestion('Enter your reply (max 280 characters): ', async (manualReply) => {
                       if (manualReply.trim()) {
-                        rl.question('Send this reply? (yes/no): ', async (sendAnswer) => {
+                        safeQuestion('Send this reply? (yes/no): ', async (sendAnswer) => {
                           if (sendAnswer.toLowerCase() === 'yes' || sendAnswer.toLowerCase() === 'y') {
                             await twitterConnector.tweet(manualReply, selectedTweet.id);
                             console.log('Reply sent!');
@@ -378,7 +426,7 @@ async function getTrends() {
       console.log(`${index + 1}. ${trend.name}${trend.tweet_volume ? ` (${trend.tweet_volume} tweets)` : ''}`);
     });
     
-    rl.question('\nAnalyze a trend? Enter trend number (or 0 to skip): ', async (answer) => {
+    safeQuestion('\nAnalyze a trend? Enter trend number (or 0 to skip): ', async (answer) => {
       const trendIndex = parseInt(answer) - 1;
       if (trendIndex >= 0 && trendIndex < trends.length) {
         const selectedTrend = trends[trendIndex];
@@ -398,7 +446,7 @@ async function getTrends() {
           console.log('\nTrend Analysis:');
           console.log(result.response);
           
-          rl.question('\nTweet about this trend? (yes/no): ', async (tweetAnswer) => {
+          safeQuestion('\nTweet about this trend? (yes/no): ', async (tweetAnswer) => {
             if (tweetAnswer.toLowerCase() === 'yes' || tweetAnswer.toLowerCase() === 'y') {
               try {
                 const tweetResult = await agent.run({
@@ -410,7 +458,7 @@ async function getTrends() {
                 
                 console.log(`\nDraft tweet: ${tweetResult.response}`);
                 
-                rl.question('Send this tweet? (yes/no): ', async (sendAnswer) => {
+                safeQuestion('Send this tweet? (yes/no): ', async (sendAnswer) => {
                   if (sendAnswer.toLowerCase() === 'yes' || sendAnswer.toLowerCase() === 'y') {
                     await twitterConnector.tweet(tweetResult.response);
                     console.log('Tweet sent!');
@@ -425,9 +473,9 @@ async function getTrends() {
                 
                 // Fallback to manual tweet
                 console.log('\nYou can still create a tweet about this trend manually:');
-                rl.question('Enter your tweet about this trend (max 280 characters): ', async (manualTweet) => {
+                safeQuestion('Enter your tweet about this trend (max 280 characters): ', async (manualTweet) => {
                   if (manualTweet.trim()) {
-                    rl.question('Send this tweet? (yes/no): ', async (sendAnswer) => {
+                    safeQuestion('Send this tweet? (yes/no): ', async (sendAnswer) => {
                       if (sendAnswer.toLowerCase() === 'yes' || sendAnswer.toLowerCase() === 'y') {
                         await twitterConnector.tweet(manualTweet);
                         console.log('Tweet sent!');
@@ -451,11 +499,11 @@ async function getTrends() {
           console.log('This could be due to an issue with the API key or service availability.');
           
           // Still allow tweeting about the trend
-          rl.question('\nTweet about this trend anyway? (yes/no): ', async (tweetAnswer) => {
+          safeQuestion('\nTweet about this trend anyway? (yes/no): ', async (tweetAnswer) => {
             if (tweetAnswer.toLowerCase() === 'yes' || tweetAnswer.toLowerCase() === 'y') {
-              rl.question('Enter your tweet about this trend (max 280 characters): ', async (manualTweet) => {
+              safeQuestion('Enter your tweet about this trend (max 280 characters): ', async (manualTweet) => {
                 if (manualTweet.trim()) {
-                  rl.question('Send this tweet? (yes/no): ', async (sendAnswer) => {
+                  safeQuestion('Send this tweet? (yes/no): ', async (sendAnswer) => {
                     if (sendAnswer.toLowerCase() === 'yes' || sendAnswer.toLowerCase() === 'y') {
                       await twitterConnector.tweet(manualTweet);
                       console.log('Tweet sent!');
@@ -485,7 +533,7 @@ async function getTrends() {
 }
 
 async function getUserTweets() {
-  rl.question('Enter Twitter username to analyze: ', async (username) => {
+  safeQuestion('Enter Twitter username to analyze: ', async (username) => {
     try {
       const tweets = await twitterConnector.getUserTweets(username, 5);
       
@@ -496,7 +544,7 @@ async function getUserTweets() {
       
       if (tweets.length > 0) {
         // Ask if user wants to analyze tweets (in case of API issues)
-        rl.question('\nAnalyze these tweets with AI? (yes/no): ', async (answer) => {
+        safeQuestion('\nAnalyze these tweets with AI? (yes/no): ', async (answer) => {
           if (answer.toLowerCase() === 'yes' || answer.toLowerCase() === 'y') {
             try {
               const result = await agent.run({
@@ -568,7 +616,7 @@ async function generateContentIdeas() {
 }
 
 async function askGrok() {
-  rl.question('Enter question for Twitter\'s Grok AI: ', async (question) => {
+  safeQuestion('Enter question for Twitter\'s Grok AI: ', async (question) => {
     try {
       console.log('\nAsking Grok...');
       const response = await twitterConnector.askGrok(question);
@@ -576,7 +624,7 @@ async function askGrok() {
       console.log('\nGrok\'s response:');
       console.log(response);
       
-      rl.question('\nHave agent analyze this response? (yes/no): ', async (answer) => {
+      safeQuestion('\nHave agent analyze this response? (yes/no): ', async (answer) => {
         if (answer.toLowerCase() === 'yes' || answer.toLowerCase() === 'y') {
           try {
             const analysis = await agent.run({
@@ -646,7 +694,7 @@ function showAgentPersonality() {
 }
 
 async function savePersonalityToJsonFile() {
-  rl.question('Enter filename to save personality (without path): ', async (filename) => {
+  safeQuestion('Enter filename to save personality (without path): ', async (filename) => {
     try {
       if (!filename.endsWith('.json')) {
         filename += '.json';
@@ -669,27 +717,31 @@ async function exitProgram() {
   console.log('Disconnecting from Twitter...');
   await twitterConnector.disconnect();
   console.log('Disconnected. Goodbye!');
-  rl.close();
+  if (rl) rl.close();
   process.exit(0);
 }
 
 // Main function
 async function main() {
+  // Initialize rl as null to avoid errors
+  rl = null;
+  
   try {
-    // Create readline interface for interactive CLI
-    rl = createInterface({
-      input: process.stdin,
-      output: process.stdout
-    });
-    
     // Connect the agent to Twitter
     console.log('Connecting to Twitter...');
     await twitterConnector.connect(agent);
     console.log('Connected to Twitter successfully!');
     
+    // Create readline interface for interactive CLI - do this AFTER connection to avoid timing issues
+    rl = createInterface({
+      input: process.stdin,
+      output: process.stdout
+    });
+    
     console.log(`\n=== ${agentConfig.name} AI Twitter Agent ===`);
     console.log(`Personality: ${personality.persona.demographics?.occupation}`);
     console.log(`Connected as: ${process.env.TWITTER_USERNAME}`);
+    console.log(`Using ${process.env.DEFAULT_MODEL}`);
     console.log(`Monitoring: ${twitterConnector.config.monitorKeywords?.length || 0} keywords, ${twitterConnector.config.monitorUsers?.length || 0} users`);
     console.log(`Personality file: ${personalityFile}`);
     
@@ -700,7 +752,7 @@ async function main() {
     process.on('SIGINT', async () => {
       console.log('\nShutting down...');
       await twitterConnector.disconnect();
-      rl.close();
+      if (rl) rl.close();
       process.exit(0);
     });
   } catch (error) {

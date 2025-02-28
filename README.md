@@ -126,6 +126,59 @@ discord.connect(swarm);
 // The swarm is now available in your Discord server!
 ```
 
+### Twitter Bot
+
+```typescript
+import { 
+  Agent, 
+  AgentRole, 
+  TwitterConnector 
+} from 'agentis';
+
+// Create the agent
+const agent = new Agent({
+  name: 'TwitterBot',
+  role: AgentRole.ASSISTANT,
+  personality: {
+    traits: ['helpful', 'concise', 'friendly'],
+    background: 'A Twitter assistant that helps with information and engagement'
+  },
+  goals: ['Provide helpful information', 'Engage with users thoughtfully']
+});
+
+// Configure the Twitter connector - no API keys required!
+const twitter = new TwitterConnector({
+  username: process.env.TWITTER_USERNAME,
+  password: process.env.TWITTER_PASSWORD,
+  email: process.env.TWITTER_EMAIL,
+  
+  // Monitor specific keywords and users
+  monitorKeywords: ['ai', 'anthropic', 'claude'],
+  monitorUsers: ['AnthropicAI'],
+  
+  // Auto-reply to tweets
+  autoReply: true
+});
+
+// Handle tweet events
+twitter.on('tweet', async (tweet) => {
+  console.log(`Received tweet from @${tweet.author.username}: ${tweet.text}`);
+  
+  // Like the tweet
+  await twitter.like(tweet.id);
+});
+
+// Connect the agent to Twitter
+await twitter.connect(agent);
+
+// Post a tweet
+await twitter.tweet('Hello Twitter! I\'m an AI assistant powered by Agentis framework.');
+
+// Ask Twitter's Grok AI a question
+const grokResponse = await twitter.askGrok('What are the latest AI developments?');
+console.log(`Grok says: ${grokResponse}`);
+```
+
 ### Multi-Provider Agent Swarms
 
 ```typescript

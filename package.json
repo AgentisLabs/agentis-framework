@@ -37,10 +37,11 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.37.0",
+    "@anthropic-ai/sdk": "^0.38.0",
     "@pinecone-database/pinecone": "^5.0.2",
     "@tavily/core": "^0.3.1",
     "@types/node": "^22.13.5",
+    "agent-twitter-client": "^0.0.18",
     "axios": "^1.8.1",
     "dotenv": "^16.4.7",
     "openai": "^4.85.4",

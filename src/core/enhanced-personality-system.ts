@@ -187,6 +187,7 @@ export interface KnowledgeAndSkills {
  */
 export interface EnhancedPersonality {
   persona: {
+    name?: string;
     demographics?: PersonaDemographics;
     appearance?: PersonaAppearance;
     personality: PersonalityProfile;
@@ -376,12 +377,32 @@ export class PersonalityUtils {
   static loadPersonalityFromJson(filePath: string): EnhancedPersonality {
     try {
       const resolvedPath = path.resolve(filePath);
+      console.log(`Attempting to load personality from resolved path: ${resolvedPath}`);
+      
+      // Check if file exists
+      if (!fs.existsSync(resolvedPath)) {
+        console.error(`File does not exist: ${resolvedPath}`);
+        
+        // If provided file doesn't exist but has a filename without path, try looking in personas directory
+        if (!filePath.includes('/') && !filePath.includes('\\')) {
+          const altPath = path.join(process.cwd(), 'personas', filePath);
+          console.log(`Trying alternate path: ${altPath}`);
+          if (fs.existsSync(altPath)) {
+            console.log(`Found file at alternate path: ${altPath}`);
+            return this.loadPersonalityFromJson(altPath);
+          }
+        }
+        
+        throw new Error(`File not found: ${resolvedPath}`);
+      }
+      
       const fileContent = fs.readFileSync(resolvedPath, 'utf8');
       const personality = JSON.parse(fileContent) as EnhancedPersonality;
       
       // Validate the personality object
       PersonalityUtils.validatePersonality(personality);
       
+      console.log(`Successfully loaded personality from: ${resolvedPath}`);
       return personality;
     } catch (error) {
       if (error instanceof Error) {
