@@ -171,11 +171,8 @@ twitterConnector.on('keyword_match', async (tweet) => {
   }
 });
 
-// Create readline interface for interactive CLI
-const rl = createInterface({
-  input: process.stdin,
-  output: process.stdout
-});
+// We'll create the readline interface later, inside the main function
+let rl: ReturnType<typeof createInterface>;
 
 // Prompt options
 function showPrompt() {
@@ -547,6 +544,12 @@ async function exitProgram() {
 // Main function
 async function main() {
   try {
+    // Create readline interface for interactive CLI
+    rl = createInterface({
+      input: process.stdin,
+      output: process.stdout
+    });
+    
     // Connect the agent to Twitter
     console.log('Connecting to Twitter...');
     await twitterConnector.connect(agent);
@@ -570,6 +573,7 @@ async function main() {
     });
   } catch (error) {
     logger.error('Error starting Twitter personality agent', error);
+    if (rl) rl.close();
     process.exit(1);
   }
 }

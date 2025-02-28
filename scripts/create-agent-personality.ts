@@ -22,11 +22,8 @@ if (!process.env.ANTHROPIC_API_KEY) {
   process.exit(1);
 }
 
-// Create readline interface
-const rl = createInterface({
-  input: process.stdin,
-  output: process.stdout
-});
+// We'll create the readline interface in the main function
+let rl: ReturnType<typeof createInterface>;
 
 // Create a prompting agent
 const agent = new Agent({
@@ -54,41 +51,41 @@ interface PersonaDefinition {
   background: string;
 }
 
-async function promptForPersonaDetails(): Promise<PersonaDefinition> {
+async function promptForPersonaDetails(readlineInterface: ReturnType<typeof createInterface>): Promise<PersonaDefinition> {
   return new Promise((resolve) => {
     console.log("\n=== Agent Personality Creator ===\n");
     console.log("Let's create a rich personality for your agent.\n");
     
     const details: Partial<PersonaDefinition> = {};
     
-    rl.question("Name: ", (name) => {
+    readlineInterface.question("Name: ", (name) => {
       details.name = name;
       
-      rl.question("Occupation/Role: ", (occupation) => {
+      readlineInterface.question("Occupation/Role: ", (occupation) => {
         details.occupation = occupation;
         
-        rl.question("Age: ", (age) => {
+        readlineInterface.question("Age: ", (age) => {
           details.age = age;
           
-          rl.question("Gender: ", (gender) => {
+          readlineInterface.question("Gender: ", (gender) => {
             details.gender = gender;
             
-            rl.question("Interests (comma-separated): ", (interests) => {
+            readlineInterface.question("Interests (comma-separated): ", (interests) => {
               details.interests = interests.split(',').map(i => i.trim());
               
-              rl.question("Areas of expertise (comma-separated): ", (expertise) => {
+              readlineInterface.question("Areas of expertise (comma-separated): ", (expertise) => {
                 details.expertise = expertise.split(',').map(e => e.trim());
                 
-                rl.question("Temperament/personality (brief description): ", (temperament) => {
+                readlineInterface.question("Temperament/personality (brief description): ", (temperament) => {
                   details.temperament = temperament;
                   
-                  rl.question("Key personality traits (comma-separated): ", (traits) => {
+                  readlineInterface.question("Key personality traits (comma-separated): ", (traits) => {
                     details.keyTraits = traits.split(',').map(t => t.trim());
                     
-                    rl.question("Communication style: ", (style) => {
+                    readlineInterface.question("Communication style: ", (style) => {
                       details.communicationStyle = style;
                       
-                      rl.question("Brief background/backstory: ", (background) => {
+                      readlineInterface.question("Brief background/backstory: ", (background) => {
                         details.background = background;
                         
                         resolve(details as PersonaDefinition);
@@ -204,8 +201,14 @@ async function savePersonality(personality: EnhancedPersonality, name: string): 
 
 async function main() {
   try {
+    // Create the readline interface
+    rl = createInterface({
+      input: process.stdin,
+      output: process.stdout
+    });
+    
     // Get basic persona details from the user
-    const personaDetails = await promptForPersonaDetails();
+    const personaDetails = await promptForPersonaDetails(rl);
     
     // Generate full personality
     const fullPersonality = await generateFullPersonality(personaDetails);
@@ -236,7 +239,7 @@ async function main() {
     rl.close();
   } catch (error) {
     logger.error('Error in personality creation process', error);
-    rl.close();
+    if (rl) rl.close();
     process.exit(1);
   }
 }
