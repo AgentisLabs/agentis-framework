@@ -1,16 +1,16 @@
- const { Scraper } = require('agent-twitter-client');
+/**
+ * Simple standalone script to test posting a tweet using Puppeteer
+ * This uses the same approach as in manual-test-twitter.js but in a more direct manner
+ */
+
 const puppeteer = require('puppeteer');
 require('dotenv').config();
 
-/**
- * This is a direct, manual test using the core browser capabilities
- * instead of relying on the package's methods.
- */
 async function main() {
   try {
-    console.log('Starting manual Twitter test...');
+    console.log('Starting tweet test...');
     
-    // Launch browser directly
+    // Launch browser
     console.log('Launching browser...');
     const browser = await puppeteer.launch({ 
       headless: false,
@@ -23,7 +23,6 @@ async function main() {
     // Navigate to Twitter login
     console.log('Navigating to Twitter login...');
     await page.goto('https://twitter.com/i/flow/login', { waitUntil: 'networkidle2' });
-    // Use setTimeout instead of waitForTimeout
     await new Promise(resolve => setTimeout(resolve, 2000));
     
     // Enter username
@@ -109,7 +108,7 @@ async function main() {
     console.log('Finding tweet compose area...');
     
     // Look for the compose area
-    const tweetText = `Manual browser test at ${new Date().toISOString()}`;
+    const tweetText = `Testing browser automation at ${new Date().toISOString()}`;
     
     // Try multiple selectors for the compose area
     const composeSelectors = [
@@ -130,6 +129,8 @@ async function main() {
           await composeArea.click();
           await new Promise(resolve => setTimeout(resolve, 500));
           await composeArea.type(tweetText);
+          // Add a delay after typing to ensure the tweet button becomes enabled
+          await new Promise(resolve => setTimeout(resolve, 3000));
           console.log('Entered tweet text');
           composerFound = true;
           break;
@@ -151,6 +152,8 @@ async function main() {
             console.log('Clicked on "What\'s happening?" text');
             await new Promise(resolve => setTimeout(resolve, 1000));
             await page.keyboard.type(tweetText);
+            // Add a delay after typing to ensure the tweet button becomes enabled
+            await new Promise(resolve => setTimeout(resolve, 3000));
             console.log('Entered tweet text via keyboard');
             composerFound = true;
             break;
@@ -193,8 +196,8 @@ async function main() {
           // Check if the button is disabled
           const isDisabled = await page.evaluate(el => {
             return el.getAttribute('aria-disabled') === 'true' || 
-                   el.disabled === true || 
-                   el.classList.contains('disabled');
+                  el.disabled === true || 
+                  el.classList.contains('disabled');
           }, button);
           
           if (isDisabled) {
@@ -213,6 +216,35 @@ async function main() {
     }
     
     if (!buttonClicked) {
+      // Try using direct DOM evaluation to find any button with Tweet or Post
+      console.log('Trying to find and click tweet button via DOM evaluation...');
+      
+      const tweetButtonFound = await page.evaluate(() => {
+        // Look for any button-like element containing 'Tweet' or 'Post'
+        const possibleButtons = Array.from(document.querySelectorAll('button, div[role="button"], span[role="button"]'));
+        
+        for (const button of possibleButtons) {
+          const text = button.textContent || '';
+          const isDisabled = button.hasAttribute('disabled') || 
+                          button.getAttribute('aria-disabled') === 'true' || 
+                          button.classList.contains('disabled');
+          
+          if ((text.includes('Tweet') || text.includes('Post')) && !isDisabled) {
+            // Click the button
+            button.click();
+            return true;
+          }
+        }
+        return false;
+      });
+      
+      if (tweetButtonFound) {
+        console.log('Found and clicked tweet button via direct DOM evaluation');
+        buttonClicked = true;
+      }
+    }
+    
+    if (!buttonClicked) {
       // Try to find any button with text 'Tweet' or 'Post'
       try {
         console.log('Looking for button with text "Tweet" or "Post"...');
@@ -224,7 +256,7 @@ async function main() {
           if (text && (text.includes('Tweet') || text.includes('Post'))) {
             console.log(`Found button with text: ${text}`);
             await button.click();
-            console.log('Clicked button');
+            console.log('Clicked button by text');
             buttonClicked = true;
             break;
           }
@@ -248,6 +280,9 @@ async function main() {
     // Take a final screenshot
     await page.screenshot({ path: 'twitter-after-tweet.png' });
     console.log('Saved final screenshot to twitter-after-tweet.png');
+    
+    // Wait a bit before closing
+    await new Promise(resolve => setTimeout(resolve, 5000));
     
     // Close browser
     console.log('Closing browser...');

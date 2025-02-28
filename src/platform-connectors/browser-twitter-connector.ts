@@ -474,6 +474,8 @@ export class BrowserTwitterConnector extends EventEmitter {
             await textareaElement.click();
             await new Promise(resolve => setTimeout(resolve, 1000));
             await textareaElement.type(content);
+            // Add a delay after typing to ensure the tweet button becomes enabled
+            await new Promise(resolve => setTimeout(resolve, 2000));
             this.logger.debug('Entered tweet content');
             composerFound = true;
             break;
@@ -506,6 +508,8 @@ export class BrowserTwitterConnector extends EventEmitter {
               
               // Type directly with keyboard
               await this.page.keyboard.type(content);
+              // Add a delay after typing to ensure the tweet button becomes enabled
+              await new Promise(resolve => setTimeout(resolve, 2000));
               this.logger.debug('Entered tweet content via keyboard');
               composerFound = true;
               break;
@@ -568,7 +572,9 @@ export class BrowserTwitterConnector extends EventEmitter {
         '[aria-label="Tweet"]',
         '[aria-label="Post"]',
         'div[role="button"]:has-text("Tweet")',
-        'div[role="button"]:has-text("Post")'
+        'div[role="button"]:has-text("Post")',
+        'button:enabled:has-text("Post")',
+        'button:enabled:has-text("Tweet")'
       ];
       
       let tweetButtonClicked = false;
@@ -643,6 +649,39 @@ export class BrowserTwitterConnector extends EventEmitter {
           }
         } catch (e) {
           this.logger.debug('Error looking for buttons by text', e);
+        }
+      }
+      
+      // If we still couldn't click the tweet button, try one more approach - 
+      // evaluate all buttons on the page and find one with "Tweet" or "Post" text
+      if (!tweetButtonClicked) {
+        this.logger.debug('Trying to find any button that looks like a tweet button');
+        try {
+          const tweetButtonFound = await this.page.evaluate(() => {
+            // Look for any button-like element containing 'Tweet' or 'Post'
+            const possibleButtons = Array.from(document.querySelectorAll('button, div[role="button"], span[role="button"]'));
+            
+            for (const button of possibleButtons) {
+              const text = button.textContent || '';
+              const isDisabled = (button as HTMLElement).hasAttribute('disabled') || 
+                               button.getAttribute('aria-disabled') === 'true' || 
+                               button.classList.contains('disabled');
+              
+              if ((text.includes('Tweet') || text.includes('Post')) && !isDisabled) {
+                // Click the button
+                (button as HTMLElement).click();
+                return true;
+              }
+            }
+            return false;
+          });
+          
+          if (tweetButtonFound) {
+            this.logger.debug('Found and clicked tweet button via direct DOM evaluation');
+            tweetButtonClicked = true;
+          }
+        } catch (e) {
+          this.logger.debug('Error finding tweet button via direct DOM evaluation', e);
         }
       }
       

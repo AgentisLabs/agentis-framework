@@ -1,88 +1,51 @@
-const { Scraper } = require('agent-twitter-client');
+const { BrowserTwitterConnector } = require('./dist/platform-connectors/browser-twitter-connector');
 require('dotenv').config();
 
 async function main() {
   try {
-    // Create a new instance of the scraper
-    console.log('Creating Scraper instance...');
-    const scraper = new Scraper();
+    console.log('Starting Twitter tweet test...');
     
-    // Login
-    console.log('Logging in...');
-    await scraper.login({
+    // Create Twitter connector with debug and non-headless mode
+    const twitterConnector = new BrowserTwitterConnector({
       username: process.env.TWITTER_USERNAME,
       password: process.env.TWITTER_PASSWORD,
-      email: process.env.TWITTER_EMAIL
+      email: process.env.TWITTER_EMAIL,
+      
+      // Browser settings
+      headless: false, // Show browser for debugging
+      debug: true // Enable debugging mode
     });
     
-    console.log('Login successful!');
+    // Create a simple mock agent for the connector
+    const mockAgent = {
+      name: 'TestAgent',
+      run: async () => ({ response: 'Hello' })
+    };
     
-    // Test sending a tweet
-    const tweetText = `Testing tweet command at ${new Date().toISOString()}`;
-    console.log(`Sending tweet: "${tweetText}"`);
+    // Connect to Twitter
+    console.log('Connecting to Twitter...');
+    await twitterConnector.connect(mockAgent);
+    console.log('Connected to Twitter successfully!');
     
-    // Use the package's tweetText function
-    try {
-      console.log('Attempting to use tweetText...');
-      if (typeof scraper.tweetText === 'function') {
-        await scraper.tweetText(tweetText);
-        console.log('Tweet sent successfully using tweetText!');
-      } else {
-        console.log('tweetText method not available, trying sendTweet...');
-        
-        // Try the package's sendTweet function
-        await scraper.sendTweet(tweetText);
-        console.log('Tweet sent successfully using sendTweet!');
-      }
-    } catch (error) {
-      console.error('Error sending tweet:', error);
-      
-      // Try using page automation methods directly
-      try {
-        console.log('Attempting to use page automation...');
-        
-        // Use scraper's browser directly
-        const page = await scraper.getPage();
-        if (!page) {
-          console.error('No page available');
-          process.exit(1);
-        }
-        
-        // Navigate to Twitter home
-        console.log('Navigating to Twitter home...');
-        await page.goto('https://twitter.com/home', { waitUntil: 'networkidle2' });
-        
-        // Find compose field
-        console.log('Looking for compose field...');
-        await page.waitForSelector('[data-testid="tweetTextarea_0"]', { timeout: 5000 });
-        await page.type('[data-testid="tweetTextarea_0"]', tweetText);
-        console.log('Entered tweet text');
-        
-        // Click tweet button
-        console.log('Looking for tweet button...');
-        const buttonSelector = '[data-testid="tweetButtonInline"]';
-        await page.waitForSelector(buttonSelector, { timeout: 5000 });
-        await page.click(buttonSelector);
-        console.log('Clicked tweet button');
-        
-        // Wait for tweet to process
-        await new Promise(resolve => setTimeout(resolve, 3000));
-        console.log('Tweet sent successfully using page automation!');
-      } catch (pageError) {
-        console.error('Error with page automation:', pageError);
-      }
-    }
+    // Post a tweet
+    console.log('Posting tweet...');
+    const tweetContent = `Testing our Twitter agent at ${new Date().toISOString()}`;
     
-    // Wait a moment
-    await new Promise(resolve => setTimeout(resolve, 3000));
+    const result = await twitterConnector.tweet(tweetContent);
+    console.log('Tweet posted successfully:', result);
     
-    // Logout
-    console.log('Logging out...');
-    await scraper.logout();
-    console.log('Logged out successfully');
+    // Wait for user to see the result
+    console.log('Waiting 15 seconds before disconnecting...');
+    await new Promise(resolve => setTimeout(resolve, 15000));
     
+    // Disconnect
+    console.log('Disconnecting...');
+    await twitterConnector.disconnect();
+    console.log('Disconnected from Twitter');
+    
+    console.log('Test completed successfully!');
   } catch (error) {
-    console.error('Error:', error);
+    console.error('Error during test:', error);
   }
 }
 
