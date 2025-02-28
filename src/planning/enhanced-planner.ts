@@ -1054,7 +1054,7 @@ export class EnhancedPlanner implements PlannerInterface {
       
       // Copy the inferred dependencies back to the original tasks
       for (let i = 0; i < tasks.length; i++) {
-        const updatedTask = updatedTasks.find(t => t.id === tasks[i].id);
+        const updatedTask = updatedTasks.find((t: {id: string}) => t.id === tasks[i].id);
         if (updatedTask) {
           tasks[i].dependencies = updatedTask.dependencies;
         }
