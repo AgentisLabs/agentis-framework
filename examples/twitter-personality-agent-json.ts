@@ -235,27 +235,51 @@ async function handleCommand(input: string) {
 async function postTweet() {
   rl.question('Enter topic or news to tweet about: ', async (topic) => {
     try {
-      const result = await agent.run({
-        task: `As ${agentConfig.name}, craft a thoughtful tweet about: "${topic}"
-               Make sure it reflects your personality, expertise in AI ethics, and Twitter style.
-               The tweet should be under 280 characters and include relevant hashtags if appropriate.
-               If this topic doesn't align with your interests or expertise, suggest an alternative angle that would be more appropriate.`
-      });
-      
-      console.log('\nDraft tweet:');
-      console.log(result.response);
-      
-      rl.question('Post this tweet? (yes/no): ', async (answer) => {
-        if (answer.toLowerCase() === 'yes' || answer.toLowerCase() === 'y') {
-          const tweetId = await twitterConnector.tweet(result.response);
-          console.log(`Tweet posted successfully! ID: ${tweetId}`);
-        } else {
-          console.log('Tweet cancelled');
-        }
-        showPrompt();
-      });
+      try {
+        const result = await agent.run({
+          task: `As ${agentConfig.name}, craft a thoughtful tweet about: "${topic}"
+                 Make sure it reflects your personality, expertise in AI ethics, and Twitter style.
+                 The tweet should be under 280 characters and include relevant hashtags if appropriate.
+                 If this topic doesn't align with your interests or expertise, suggest an alternative angle that would be more appropriate.`
+        });
+        
+        console.log('\nDraft tweet:');
+        console.log(result.response);
+        
+        rl.question('Post this tweet? (yes/no): ', async (answer) => {
+          if (answer.toLowerCase() === 'yes' || answer.toLowerCase() === 'y') {
+            const tweetId = await twitterConnector.tweet(result.response);
+            console.log(`Tweet posted successfully! ID: ${tweetId}`);
+          } else {
+            console.log('Tweet cancelled');
+          }
+          showPrompt();
+        });
+      } catch (aiError) {
+        console.error('\nError generating tweet with AI:', aiError.message);
+        console.log('This could be due to an issue with the API key or service availability.');
+        
+        // Fallback to manual tweet creation
+        console.log('\nYou can still create a tweet manually:');
+        rl.question('Enter your tweet (max 280 characters): ', async (manualTweet) => {
+          if (manualTweet.trim()) {
+            rl.question('Post this tweet? (yes/no): ', async (answer) => {
+              if (answer.toLowerCase() === 'yes' || answer.toLowerCase() === 'y') {
+                const tweetId = await twitterConnector.tweet(manualTweet);
+                console.log(`Tweet posted successfully! ID: ${tweetId}`);
+              } else {
+                console.log('Tweet cancelled');
+              }
+              showPrompt();
+            });
+          } else {
+            console.log('Tweet cancelled - empty content');
+            showPrompt();
+          }
+        });
+      }
     } catch (error) {
-      logger.error('Error creating tweet', error);
+      logger.error('Error in tweet posting process', error);
       showPrompt();
     }
   });
@@ -285,23 +309,47 @@ async function searchTweets() {
               
               rl.question('Reply to this tweet? (yes/no): ', async (replyAnswer) => {
                 if (replyAnswer.toLowerCase() === 'yes' || replyAnswer.toLowerCase() === 'y') {
-                  const result = await agent.run({
-                    task: `As ${agentConfig.name}, craft a thoughtful reply to this tweet: "${selectedTweet.text}" by @${selectedTweet.author.username}
-                           Your reply should add value to the conversation, reflect your personality and expertise in AI ethics.
-                           Keep your response under 280 characters.`
-                  });
-                  
-                  console.log(`\nDraft reply: ${result.response}`);
-                  
-                  rl.question('Send this reply? (yes/no): ', async (sendAnswer) => {
-                    if (sendAnswer.toLowerCase() === 'yes' || sendAnswer.toLowerCase() === 'y') {
-                      await twitterConnector.tweet(result.response, selectedTweet.id);
-                      console.log('Reply sent!');
-                    } else {
-                      console.log('Reply cancelled');
-                    }
-                    showPrompt();
-                  });
+                  try {
+                    const result = await agent.run({
+                      task: `As ${agentConfig.name}, craft a thoughtful reply to this tweet: "${selectedTweet.text}" by @${selectedTweet.author.username}
+                             Your reply should add value to the conversation, reflect your personality and expertise in AI ethics.
+                             Keep your response under 280 characters.`
+                    });
+                    
+                    console.log(`\nDraft reply: ${result.response}`);
+                    
+                    rl.question('Send this reply? (yes/no): ', async (sendAnswer) => {
+                      if (sendAnswer.toLowerCase() === 'yes' || sendAnswer.toLowerCase() === 'y') {
+                        await twitterConnector.tweet(result.response, selectedTweet.id);
+                        console.log('Reply sent!');
+                      } else {
+                        console.log('Reply cancelled');
+                      }
+                      showPrompt();
+                    });
+                  } catch (aiError) {
+                    console.error('\nError generating reply with AI:', aiError.message);
+                    console.log('This could be due to an issue with the API key or service availability.');
+                    
+                    // Fallback to manual reply
+                    console.log('\nYou can still create a reply manually:');
+                    rl.question('Enter your reply (max 280 characters): ', async (manualReply) => {
+                      if (manualReply.trim()) {
+                        rl.question('Send this reply? (yes/no): ', async (sendAnswer) => {
+                          if (sendAnswer.toLowerCase() === 'yes' || sendAnswer.toLowerCase() === 'y') {
+                            await twitterConnector.tweet(manualReply, selectedTweet.id);
+                            console.log('Reply sent!');
+                          } else {
+                            console.log('Reply cancelled');
+                          }
+                          showPrompt();
+                        });
+                      } else {
+                        console.log('Reply cancelled - empty content');
+                        showPrompt();
+                      }
+                    });
+                  }
                 } else {
                   showPrompt();
                 }
@@ -335,44 +383,97 @@ async function getTrends() {
       if (trendIndex >= 0 && trendIndex < trends.length) {
         const selectedTrend = trends[trendIndex];
         
-        const result = await agent.run({
-          task: `As ${agentConfig.name}, analyze this trending topic on Twitter: "${selectedTrend.name}"
-                 Consider:
-                 1. Is this related to your areas of expertise (AI ethics, tech policy, etc.)?
-                 2. What might be driving this trend?
-                 3. Are there ethical dimensions worth exploring?
-                 4. Would you engage with this trend? If so, how?
-                 
-                 Provide a thoughtful analysis reflecting your personality and perspective.`
-        });
-        
-        console.log('\nTrend Analysis:');
-        console.log(result.response);
-        
-        rl.question('\nTweet about this trend? (yes/no): ', async (tweetAnswer) => {
-          if (tweetAnswer.toLowerCase() === 'yes' || tweetAnswer.toLowerCase() === 'y') {
-            const tweetResult = await agent.run({
-              task: `As ${agentConfig.name}, craft a thoughtful tweet about the trending topic "${selectedTrend.name}"
-                     Make sure it reflects your personality, expertise, and Twitter style.
-                     The tweet should be under 280 characters and include the trend in a natural way.
-                     If this trend doesn't align with your interests or expertise, craft a tweet that relates it to a relevant AI ethics aspect.`
-            });
-            
-            console.log(`\nDraft tweet: ${tweetResult.response}`);
-            
-            rl.question('Send this tweet? (yes/no): ', async (sendAnswer) => {
-              if (sendAnswer.toLowerCase() === 'yes' || sendAnswer.toLowerCase() === 'y') {
-                await twitterConnector.tweet(tweetResult.response);
-                console.log('Tweet sent!');
-              } else {
-                console.log('Tweet cancelled');
+        try {
+          const result = await agent.run({
+            task: `As ${agentConfig.name}, analyze this trending topic on Twitter: "${selectedTrend.name}"
+                   Consider:
+                   1. Is this related to your areas of expertise (AI ethics, tech policy, etc.)?
+                   2. What might be driving this trend?
+                   3. Are there ethical dimensions worth exploring?
+                   4. Would you engage with this trend? If so, how?
+                   
+                   Provide a thoughtful analysis reflecting your personality and perspective.`
+          });
+          
+          console.log('\nTrend Analysis:');
+          console.log(result.response);
+          
+          rl.question('\nTweet about this trend? (yes/no): ', async (tweetAnswer) => {
+            if (tweetAnswer.toLowerCase() === 'yes' || tweetAnswer.toLowerCase() === 'y') {
+              try {
+                const tweetResult = await agent.run({
+                  task: `As ${agentConfig.name}, craft a thoughtful tweet about the trending topic "${selectedTrend.name}"
+                         Make sure it reflects your personality, expertise, and Twitter style.
+                         The tweet should be under 280 characters and include the trend in a natural way.
+                         If this trend doesn't align with your interests or expertise, craft a tweet that relates it to a relevant AI ethics aspect.`
+                });
+                
+                console.log(`\nDraft tweet: ${tweetResult.response}`);
+                
+                rl.question('Send this tweet? (yes/no): ', async (sendAnswer) => {
+                  if (sendAnswer.toLowerCase() === 'yes' || sendAnswer.toLowerCase() === 'y') {
+                    await twitterConnector.tweet(tweetResult.response);
+                    console.log('Tweet sent!');
+                  } else {
+                    console.log('Tweet cancelled');
+                  }
+                  showPrompt();
+                });
+              } catch (aiError) {
+                console.error('\nError generating tweet with AI:', aiError.message);
+                console.log('This could be due to an issue with the API key or service availability.');
+                
+                // Fallback to manual tweet
+                console.log('\nYou can still create a tweet about this trend manually:');
+                rl.question('Enter your tweet about this trend (max 280 characters): ', async (manualTweet) => {
+                  if (manualTweet.trim()) {
+                    rl.question('Send this tweet? (yes/no): ', async (sendAnswer) => {
+                      if (sendAnswer.toLowerCase() === 'yes' || sendAnswer.toLowerCase() === 'y') {
+                        await twitterConnector.tweet(manualTweet);
+                        console.log('Tweet sent!');
+                      } else {
+                        console.log('Tweet cancelled');
+                      }
+                      showPrompt();
+                    });
+                  } else {
+                    console.log('Tweet cancelled - empty content');
+                    showPrompt();
+                  }
+                });
               }
+            } else {
               showPrompt();
-            });
-          } else {
-            showPrompt();
-          }
-        });
+            }
+          });
+        } catch (aiError) {
+          console.error('\nError analyzing trend with AI:', aiError.message);
+          console.log('This could be due to an issue with the API key or service availability.');
+          
+          // Still allow tweeting about the trend
+          rl.question('\nTweet about this trend anyway? (yes/no): ', async (tweetAnswer) => {
+            if (tweetAnswer.toLowerCase() === 'yes' || tweetAnswer.toLowerCase() === 'y') {
+              rl.question('Enter your tweet about this trend (max 280 characters): ', async (manualTweet) => {
+                if (manualTweet.trim()) {
+                  rl.question('Send this tweet? (yes/no): ', async (sendAnswer) => {
+                    if (sendAnswer.toLowerCase() === 'yes' || sendAnswer.toLowerCase() === 'y') {
+                      await twitterConnector.tweet(manualTweet);
+                      console.log('Tweet sent!');
+                    } else {
+                      console.log('Tweet cancelled');
+                    }
+                    showPrompt();
+                  });
+                } else {
+                  console.log('Tweet cancelled - empty content');
+                  showPrompt();
+                }
+              });
+            } else {
+              showPrompt();
+            }
+          });
+        }
       } else {
         showPrompt();
       }
@@ -394,23 +495,38 @@ async function getUserTweets() {
       });
       
       if (tweets.length > 0) {
-        const result = await agent.run({
-          task: `As ${agentConfig.name}, analyze these recent tweets from @${username}:
-                 ${tweets.map((t, i) => `${i+1}. "${t.text}"`).join('\n')}
-                 
-                 Consider:
-                 1. Are they discussing topics related to your interests (AI ethics, tech policy, etc.)?
-                 2. What themes or perspectives are evident in their content?
-                 3. How might you engage with this person constructively?
-                 
-                 Provide a thoughtful analysis reflecting your personality and perspective.`
+        // Ask if user wants to analyze tweets (in case of API issues)
+        rl.question('\nAnalyze these tweets with AI? (yes/no): ', async (answer) => {
+          if (answer.toLowerCase() === 'yes' || answer.toLowerCase() === 'y') {
+            try {
+              const result = await agent.run({
+                task: `As ${agentConfig.name}, analyze these recent tweets from @${username}:
+                       ${tweets.map((t, i) => `${i+1}. "${t.text}"`).join('\n')}
+                       
+                       Consider:
+                       1. Are they discussing topics related to your interests (AI ethics, tech policy, etc.)?
+                       2. What themes or perspectives are evident in their content?
+                       3. How might you engage with this person constructively?
+                       
+                       Provide a thoughtful analysis reflecting your personality and perspective.`
+              });
+              
+              console.log('\nAccount Analysis:');
+              console.log(result.response);
+              showPrompt();
+            } catch (error) {
+              console.error('\nError analyzing tweets with AI:', error.message);
+              console.log('This could be due to an issue with the API key or service availability.');
+              console.log('You can still use other Twitter functions that don\'t require AI analysis.');
+              showPrompt();
+            }
+          } else {
+            showPrompt();
+          }
         });
-        
-        console.log('\nAccount Analysis:');
-        console.log(result.response);
+      } else {
+        showPrompt();
       }
-      
-      showPrompt();
     } catch (error) {
       logger.error(`Error getting tweets for user ${username}`, error);
       showPrompt();
@@ -436,7 +552,17 @@ async function generateContentIdeas() {
     console.log(result.response);
     showPrompt();
   } catch (error) {
-    logger.error('Error generating content ideas', error);
+    console.error('\nError generating content ideas with AI:', error.message);
+    console.log('This could be due to an issue with the API key or service availability.');
+    
+    // Provide fallback content ideas
+    console.log('\nSuggested content categories to consider:');
+    console.log('1. Current AI policy developments');
+    console.log('2. New research papers on algorithmic fairness');
+    console.log('3. Questions about human-AI collaboration');
+    console.log('4. Examples of responsible AI implementation');
+    console.log('5. Commentary on tech industry ethics initiatives');
+    
     showPrompt();
   }
 }
@@ -452,21 +578,27 @@ async function askGrok() {
       
       rl.question('\nHave agent analyze this response? (yes/no): ', async (answer) => {
         if (answer.toLowerCase() === 'yes' || answer.toLowerCase() === 'y') {
-          const analysis = await agent.run({
-            task: `As ${agentConfig.name}, analyze this response from Twitter's Grok AI to the question: "${question}"
-                   
-                   Grok's response: "${response}"
-                   
-                   Provide your thoughts on:
-                   1. The accuracy and completeness of Grok's response
-                   2. Any ethical considerations or missing nuance
-                   3. How you might address the same question differently
-                   
-                   Be thoughtful and fair in your assessment, consistent with your personality and expertise.`
-          });
-          
-          console.log('\nAnalysis of Grok\'s Response:');
-          console.log(analysis.response);
+          try {
+            const analysis = await agent.run({
+              task: `As ${agentConfig.name}, analyze this response from Twitter's Grok AI to the question: "${question}"
+                     
+                     Grok's response: "${response}"
+                     
+                     Provide your thoughts on:
+                     1. The accuracy and completeness of Grok's response
+                     2. Any ethical considerations or missing nuance
+                     3. How you might address the same question differently
+                     
+                     Be thoughtful and fair in your assessment, consistent with your personality and expertise.`
+            });
+            
+            console.log('\nAnalysis of Grok\'s Response:');
+            console.log(analysis.response);
+          } catch (aiError) {
+            console.error('\nError analyzing Grok response with AI:', aiError.message);
+            console.log('This could be due to an issue with the API key or service availability.');
+            console.log('\nYou can still read the Grok response above and form your own analysis.');
+          }
         }
         
         showPrompt();
