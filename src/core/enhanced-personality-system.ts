@@ -217,6 +217,9 @@ export interface EnhancedAgentConfig {
 /**
  * Utility functions for working with enhanced personalities
  */
+import fs from 'fs';
+import path from 'path';
+
 export class PersonalityUtils {
   /**
    * Generate a system prompt from an enhanced personality
@@ -362,5 +365,137 @@ export class PersonalityUtils {
       voice: enhanced.persona.personality.communication.tone.join(", "),
       examples: enhanced.content.examples?.writingExamples?.map(ex => ex.content) || []
     };
+  }
+  
+  /**
+   * Load a personality profile from a JSON file
+   * 
+   * @param filePath Path to the JSON personality file
+   * @returns The enhanced personality object
+   */
+  static loadPersonalityFromJson(filePath: string): EnhancedPersonality {
+    try {
+      const resolvedPath = path.resolve(filePath);
+      const fileContent = fs.readFileSync(resolvedPath, 'utf8');
+      const personality = JSON.parse(fileContent) as EnhancedPersonality;
+      
+      // Validate the personality object
+      PersonalityUtils.validatePersonality(personality);
+      
+      return personality;
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new Error(`Failed to load personality from ${filePath}: ${error.message}`);
+      } else {
+        throw new Error(`Failed to load personality from ${filePath}: Unknown error`);
+      }
+    }
+  }
+  
+  /**
+   * Save a personality profile to a JSON file
+   * 
+   * @param personality The enhanced personality object
+   * @param filePath Path where to save the JSON personality file
+   */
+  static savePersonalityToJson(personality: EnhancedPersonality, filePath: string): void {
+    try {
+      const resolvedPath = path.resolve(filePath);
+      // Make sure the directory exists
+      const directory = path.dirname(resolvedPath);
+      if (!fs.existsSync(directory)) {
+        fs.mkdirSync(directory, { recursive: true });
+      }
+      
+      // Format the JSON with indentation for readability
+      const jsonContent = JSON.stringify(personality, null, 2);
+      fs.writeFileSync(resolvedPath, jsonContent, 'utf8');
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new Error(`Failed to save personality to ${filePath}: ${error.message}`);
+      } else {
+        throw new Error(`Failed to save personality to ${filePath}: Unknown error`);
+      }
+    }
+  }
+  
+  /**
+   * Create an agent configuration from a personality profile
+   * 
+   * @param name The name of the agent
+   * @param personality The enhanced personality object
+   * @param role Optional role for the agent (defaults to ASSISTANT)
+   * @param model Optional model to use
+   * @returns An EnhancedAgentConfig object
+   */
+  static createAgentConfig(
+    name: string, 
+    personality: EnhancedPersonality, 
+    role: AgentRole | string = AgentRole.ASSISTANT,
+    model?: string
+  ): EnhancedAgentConfig {
+    return {
+      name,
+      role,
+      personality,
+      model
+    };
+  }
+  
+  /**
+   * Validate that a personality object has all required fields
+   * 
+   * @param personality The personality object to validate
+   * @throws Error if the personality is invalid
+   */
+  private static validatePersonality(personality: EnhancedPersonality): void {
+    // Check required top-level sections
+    if (!personality.persona) throw new Error('Personality missing required "persona" section');
+    if (!personality.content) throw new Error('Personality missing required "content" section');
+    if (!personality.motivation) throw new Error('Personality missing required "motivation" section');
+    
+    // Check required persona sub-sections
+    if (!personality.persona.personality) 
+      throw new Error('Personality missing required "persona.personality" section');
+    
+    // Check required personality traits
+    const { persona } = personality;
+    if (!persona.personality.traits || !Array.isArray(persona.personality.traits) || persona.personality.traits.length === 0)
+      throw new Error('Personality must have at least one trait defined in "persona.personality.traits"');
+    
+    if (!persona.personality.values || !Array.isArray(persona.personality.values) || persona.personality.values.length === 0)
+      throw new Error('Personality must have at least one value defined in "persona.personality.values"');
+    
+    if (!persona.personality.communication || !persona.personality.communication.tone || !Array.isArray(persona.personality.communication.tone))
+      throw new Error('Personality must have "persona.personality.communication.tone" defined as an array');
+    
+    if (!persona.personality.communication.style || !Array.isArray(persona.personality.communication.style))
+      throw new Error('Personality must have "persona.personality.communication.style" defined as an array');
+    
+    // Check required content sub-sections
+    if (!personality.content.preferences) 
+      throw new Error('Personality missing required "content.preferences" section');
+    
+    if (!personality.content.preferences.topics)
+      throw new Error('Personality missing required "content.preferences.topics" section');
+    
+    if (!personality.content.preferences.topics.favored || !Array.isArray(personality.content.preferences.topics.favored))
+      throw new Error('Personality must have "content.preferences.topics.favored" defined as an array');
+    
+    if (!personality.content.preferences.topics.avoided || !Array.isArray(personality.content.preferences.topics.avoided))
+      throw new Error('Personality must have "content.preferences.topics.avoided" defined as an array');
+    
+    // Check required motivation sub-sections
+    if (!personality.motivation.goals) 
+      throw new Error('Personality missing required "motivation.goals" section');
+    
+    if (!personality.motivation.goals.shortTermGoals || !Array.isArray(personality.motivation.goals.shortTermGoals))
+      throw new Error('Personality must have "motivation.goals.shortTermGoals" defined as an array');
+    
+    if (!personality.motivation.goals.longTermGoals || !Array.isArray(personality.motivation.goals.longTermGoals))
+      throw new Error('Personality must have "motivation.goals.longTermGoals" defined as an array');
+    
+    if (!personality.motivation.goals.values || !Array.isArray(personality.motivation.goals.values))
+      throw new Error('Personality must have "motivation.goals.values" defined as an array');
   }
 }
