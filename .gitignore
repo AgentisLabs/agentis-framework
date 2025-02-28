@@ -39,3 +39,7 @@ Thumbs.db
 
 # Data directories
 data/
+
+*.png
+
+

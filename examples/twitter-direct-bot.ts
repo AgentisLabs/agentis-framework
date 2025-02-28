@@ -1,13 +1,13 @@
 import dotenv from 'dotenv';
 import { Agent } from '../src/core/agent';
-import { TwitterConnector } from '../src/platform-connectors/twitter-connector';
+import { TwitterDirectConnector } from '../src/platform-connectors/twitter-direct-connector';
 import { Logger } from '../src/utils/logger';
 
 // Load environment variables
 dotenv.config();
 
 // Configure logging
-const logger = new Logger('TwitterBot');
+const logger = new Logger('TwitterDirectBot');
 
 // Make sure required environment variables are set
 const requiredEnvVars = ['TWITTER_USERNAME', 'TWITTER_PASSWORD'];
@@ -31,16 +31,10 @@ const agent = new Agent({
 });
 
 // Configure the Twitter connector
-const twitterConnector = new TwitterConnector({
+const twitterConnector = new TwitterDirectConnector({
   username: process.env.TWITTER_USERNAME,
   password: process.env.TWITTER_PASSWORD,
   email: process.env.TWITTER_EMAIL,
-  
-  // Optional Twitter API credentials for additional features
-  apiKey: process.env.TWITTER_API_KEY,
-  apiSecret: process.env.TWITTER_API_SECRET_KEY,
-  accessToken: process.env.TWITTER_ACCESS_TOKEN,
-  accessSecret: process.env.TWITTER_ACCESS_TOKEN_SECRET,
   
   // Monitor specific keywords and users
   monitorKeywords: process.env.MONITOR_KEYWORDS?.split(','),
@@ -50,7 +44,10 @@ const twitterConnector = new TwitterConnector({
   autoReply: process.env.AUTO_REPLY === 'true',
   
   // Poll interval in milliseconds (default: 60000 = 1 minute)
-  pollInterval: process.env.POLL_INTERVAL ? parseInt(process.env.POLL_INTERVAL) : 60000
+  pollInterval: process.env.POLL_INTERVAL ? parseInt(process.env.POLL_INTERVAL) : 60000,
+  
+  // Debug mode
+  debug: process.env.DEBUG_TWITTER === 'true'
 });
 
 // Event handlers for tweets
@@ -73,11 +70,15 @@ twitterConnector.on('tweet', async (tweet) => {
       }
       
       if (result.response.toLowerCase().includes('like')) {
-        await twitterConnector.like(tweet.id);
+        if (tweet.id) {
+          await twitterConnector.like(tweet.id);
+        }
       }
       
       if (result.response.toLowerCase().includes('retweet')) {
-        await twitterConnector.retweet(tweet.id);
+        if (tweet.id) {
+          await twitterConnector.retweet(tweet.id);
+        }
       }
     } catch (error) {
       logger.error('Error handling tweet', error);
@@ -97,15 +98,8 @@ async function main() {
   try {
     // Connect the agent to Twitter
     logger.info('Connecting to Twitter...');
-    try {
-      // Set headless to false to see the browser for debugging
-      twitterConnector.config.headless = false;
-      await twitterConnector.connect(agent);
-      logger.info('Twitter bot successfully connected and logged in');
-    } catch (connectError) {
-      logger.error('Failed to connect to Twitter', connectError);
-      throw connectError;
-    }
+    await twitterConnector.connect(agent);
+    logger.info('Twitter bot successfully connected and logged in');
     
     // Send a startup tweet if STARTUP_TWEET is set
     if (process.env.STARTUP_TWEET === 'true') {
@@ -121,62 +115,6 @@ async function main() {
         logger.error('Failed to send startup tweet', error);
         logger.debug('Error details:', error);
       }
-    }
-    
-    // If SEARCH_ON_STARTUP is set, perform an initial search
-    if (process.env.SEARCH_ON_STARTUP === 'true' && process.env.SEARCH_QUERY) {
-      logger.info(`Search feature currently disabled due to API limitations`);
-      logger.info(`Would have searched for: ${process.env.SEARCH_QUERY}`);
-      
-      /* Disabling API searches since they're not working
-      const tweets = await twitterConnector.searchTweets(process.env.SEARCH_QUERY, 5);
-      
-      if (tweets.length > 0) {
-        logger.info(`Found ${tweets.length} tweets matching search query`);
-        
-        for (const tweet of tweets) {
-          logger.info(`Tweet from @${tweet.author.username}: ${tweet.text}`);
-        }
-      } else {
-        logger.info('No tweets found matching search query');
-      }
-      */
-    }
-    
-    // If GET_TRENDS is set, fetch and display current trends
-    if (process.env.GET_TRENDS === 'true') {
-      logger.info('Trends feature currently disabled due to API limitations');
-      
-      /* Disabling API trends since they're not working
-      logger.info('Fetching current Twitter trends');
-      
-      const trends = await twitterConnector.getTrends();
-      
-      if (trends.length > 0) {
-        logger.info(`Top trends on Twitter:`);
-        
-        trends.slice(0, 10).forEach((trend, index) => {
-          logger.info(`${index + 1}. ${trend.name} (${trend.tweet_volume || 'N/A'} tweets)`);
-        });
-      } else {
-        logger.info('No trends available');
-      }
-      */
-    }
-    
-    // If ASK_GROK is set, send a question to Grok
-    if (process.env.ASK_GROK === 'true' && process.env.GROK_QUESTION) {
-      logger.info('Grok feature currently disabled due to API limitations');
-      logger.info(`Would have asked Grok: ${process.env.GROK_QUESTION}`);
-      
-      /* Disabling Grok API since it's not working
-      try {
-        const response = await twitterConnector.askGrok(process.env.GROK_QUESTION);
-        logger.info(`Grok's response: ${response}`);
-      } catch (error) {
-        logger.error('Error asking Grok', error);
-      }
-      */
     }
     
     // Keep the process running
