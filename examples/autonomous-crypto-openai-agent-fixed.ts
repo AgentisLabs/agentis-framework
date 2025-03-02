@@ -74,6 +74,7 @@ interface TokenData {
   volume24h: number;
   marketCap?: number;
   rank?: number;
+  isDiscovered?: boolean;  // Add for discovered tokens
 }
 
 class CryptoAnalysisTool {
@@ -768,6 +769,48 @@ class AutonomousCryptoOpenAIAgent {
           await this.createAndExecutePlan();
         }
       }, planningIntervalMs);
+      
+      // Set up token discovery to run every 4 hours to find new projects
+      const discoveryIntervalMs = 4 * 60 * 60 * 1000; 
+      setInterval(async () => {
+        if (this.isRunning) {
+          logger.info('Running scheduled token discovery (every 4 hours)');
+          try {
+            // Run the specialized token discovery task
+            await this.executeTokenDiscoveryTask();
+          } catch (discoveryError) {
+            logger.error('Error in scheduled token discovery', discoveryError);
+          }
+        }
+      }, discoveryIntervalMs);
+      
+      // Set up specialized major-cap trading analysis to run daily
+      const tradingAnalysisIntervalMs = 24 * 60 * 60 * 1000;
+      setTimeout(() => {
+        // Start the first one after 30 minutes
+        setInterval(async () => {
+          if (this.isRunning) {
+            logger.info('Running scheduled major-cap trading analysis (daily)');
+            try {
+              // Analyze major tokens with trading focus
+              const majorTokens = ['SOL', 'BTC', 'ETH', 'RNDR', 'FET'];
+              // Randomly select one major token to analyze each day
+              const selectedToken = majorTokens[Math.floor(Math.random() * majorTokens.length)];
+              
+              // First research it
+              await this.executeResearchTask({
+                description: `Deep research of major token: ${selectedToken}`,
+                type: 'research' 
+              });
+              
+              // Then analyze it with trading focus
+              await this.analyzeSpecificToken(selectedToken, true);
+            } catch (error) {
+              logger.error('Error in scheduled trading analysis', error);
+            }
+          }
+        }, tradingAnalysisIntervalMs);
+      }, 30 * 60 * 1000);
     } catch (error) {
       logger.error('Failed to start agent', error);
       throw error;
@@ -1006,55 +1049,228 @@ class AutonomousCryptoOpenAIAgent {
    * 
    * @param task - Research task
    */
+  /**
+   * Execute a research task with enhanced discovery capabilities
+   * 
+   * @param task - Research task
+   */
   private async executeResearchTask(task: {description: string; type?: string}): Promise<void> {
     logger.info(`Executing research task: ${task.description}`);
     
     try {
-      // Find promising tokens
-      const trendingResult = await this.cryptoTool.getTrendingTokens({
-        limit: 15,
-        minPriceChange: 5,
+      // Determine research strategy based on task description
+      const isDiscoveryMode = task.description.toLowerCase().includes('discover') || 
+                             task.description.toLowerCase().includes('new');
+      
+      const isDeepDive = task.description.toLowerCase().includes('deep') || 
+                         task.description.toLowerCase().includes('detailed');
+                         
+      const isMajorCapFocus = task.description.toLowerCase().includes('major') || 
+                             task.description.toLowerCase().includes('top') ||
+                             task.description.toLowerCase().includes('solana');
+                             
+      // STRATEGY 1: Get trending tokens from BirdEye
+      let trendingResult = await this.cryptoTool.getTrendingTokens({
+        limit: isDiscoveryMode ? 25 : 15,
+        minPriceChange: isDiscoveryMode ? 3 : 5,
         focusAreas: this.settings.focusAreas
       });
       
-      logger.info(`Found ${trendingResult.tokens.length} trending tokens`);
+      let tokenList = [...trendingResult.tokens];
+      
+      // STRATEGY 2: Research major caps if specifically requested
+      if (isMajorCapFocus) {
+        // Add major tokens that may not show in trending lists
+        const majorTokens = [
+          { name: "Solana", symbol: "SOL", price: 0, priceChange24h: 0, volume24h: 0 },
+          { name: "Bitcoin", symbol: "BTC", price: 0, priceChange24h: 0, volume24h: 0 },
+          { name: "Ethereum", symbol: "ETH", price: 0, priceChange24h: 0, volume24h: 0 },
+          { name: "Fetch.ai", symbol: "FET", price: 0, priceChange24h: 0, volume24h: 0 },
+          { name: "Render", symbol: "RNDR", price: 0, priceChange24h: 0, volume24h: 0 },
+          { name: "Chainlink", symbol: "LINK", price: 0, priceChange24h: 0, volume24h: 0 }
+        ];
+        
+        // Add major tokens that aren't already in the trending list
+        for (const majorToken of majorTokens) {
+          if (!tokenList.some(t => t.symbol === majorToken.symbol)) {
+            tokenList.push(majorToken);
+          }
+        }
+      }
+      
+      // STRATEGY 3: Discover new tokens via web research
+      if (isDiscoveryMode) {
+        // Perform specialized search for discovering new AI crypto projects
+        const discoverQueries = [
+          "newest AI crypto tokens launched this month",
+          "promising new AI blockchain projects",
+          "upcoming AI crypto token launches",
+          "AI crypto projects with recent fundraising",
+          "solana AI tokens new projects"
+        ];
+        
+        // Select two random queries to keep execution time reasonable
+        const selectedQueries = discoverQueries.sort(() => 0.5 - Math.random()).slice(0, 2);
+        
+        for (const query of selectedQueries) {
+          try {
+            const discoveryResults = await this.searchTool.execute({
+              query,
+              maxResults: 3,
+              includeAnswer: true
+            });
+            
+            // Extract token mentions from search results
+            if (discoveryResults.answer) {
+              const tokenMatches = discoveryResults.answer.match(/\$([A-Z0-9]{2,})/g) || [];
+              const tokenSymbols = tokenMatches.map((m: string) => m.substring(1));
+              
+              logger.info(`Discovered potential new tokens from search: ${tokenSymbols.join(', ')}`);
+              
+              // Add discovered tokens to our research list
+              for (const symbol of tokenSymbols) {
+                if (!tokenList.some(t => t.symbol === symbol)) {
+                  tokenList.push({ 
+                    name: symbol, 
+                    symbol, 
+                    price: 0, 
+                    priceChange24h: 0, 
+                    volume24h: 0,
+                    isDiscovered: true  // Mark as discovered for special handling
+                  });
+                }
+              }
+            }
+          } catch (discoveryError) {
+            logger.error(`Error in discovery search for "${query}"`, discoveryError);
+          }
+        }
+      }
+      
+      logger.info(`Found ${tokenList.length} tokens to research`);
+      
+      // Determine how many tokens to research based on task type
+      const researchCount = isDeepDive ? 1 : isDiscoveryMode ? 5 : 3;
       
       // For each interesting token, gather basic information
-      for (const token of trendingResult.tokens.slice(0, 3)) {
+      // Prioritize tokens mentioned in the task description first
+      const taskTokenMatches = task.description.match(/\b([A-Z]{2,})\b/g) || [];
+      const mentionedTokens = taskTokenMatches.filter(symbol => 
+        symbol !== 'AI' && symbol !== 'ML' && tokenList.some(t => t.symbol === symbol)
+      );
+      
+      // Sort the token list with mentioned tokens first, then by price change
+      tokenList.sort((a, b) => {
+        // First prioritize tokens explicitly mentioned in the task
+        const aIsMentioned = mentionedTokens.includes(a.symbol);
+        const bIsMentioned = mentionedTokens.includes(b.symbol);
+        
+        if (aIsMentioned && !bIsMentioned) return -1;
+        if (!aIsMentioned && bIsMentioned) return 1;
+        
+        // Then prioritize discovered tokens for discovery tasks
+        if (isDiscoveryMode) {
+          const aIsDiscovered = !!(a as any).isDiscovered;
+          const bIsDiscovered = !!(b as any).isDiscovered;
+          
+          if (aIsDiscovered && !bIsDiscovered) return -1;
+          if (!aIsDiscovered && bIsDiscovered) return 1;
+        }
+        
+        // Finally sort by price change (descending)
+        return b.priceChange24h - a.priceChange24h;
+      });
+      
+      // Select tokens to research
+      const tokensToResearch = tokenList.slice(0, researchCount);
+      
+      // For each selected token, perform comprehensive research
+      for (const token of tokensToResearch) {
         try {
           logger.info(`Researching token: ${token.name} (${token.symbol})`);
           
-          // Use the Tavily search tool to gather information
+          // Build a comprehensive search strategy
+          let searchResults;
+          let additionalContext = '';
+          
+          // STEP 1: Basic token information
           const searchQuery = `${token.name} ${token.symbol} crypto token AI machine learning use case project details`;
           
-          const searchResults = await this.searchTool.execute({
+          searchResults = await this.searchTool.execute({
             query: searchQuery,
-            maxResults: 5,
+            maxResults: isDeepDive ? 7 : 5,
             includeAnswer: true
           });
           
           logger.info(`Found ${searchResults.results?.length || 0} search results for ${token.symbol}`);
           
+          // STEP 2: For deep dives, gather additional technical and market info
+          if (isDeepDive) {
+            try {
+              // Get technical details
+              const technicalQuery = `${token.symbol} ${token.name} crypto token technical analysis detailed`;
+              const technicalResults = await this.searchTool.execute({
+                query: technicalQuery,
+                maxResults: 3,
+                includeAnswer: true
+              });
+              
+              // Get team and development info
+              const teamQuery = `${token.symbol} ${token.name} crypto token team developers roadmap`;
+              const teamResults = await this.searchTool.execute({
+                query: teamQuery,
+                maxResults: 3,
+                includeAnswer: true
+              });
+              
+              // Combine the additional information
+              additionalContext = `
+                Technical Analysis:
+                ${technicalResults.answer || 'No technical analysis available'}
+                
+                Team & Development:
+                ${teamResults.answer || 'No team information available'}
+              `;
+            } catch (deepDiveError) {
+              logger.error(`Error in deep dive research for ${token.symbol}`, deepDiveError);
+            }
+          }
+          
           // Create formatted sources information
           const sourcesList = Array.isArray(searchResults.results) 
-            ? searchResults.results.slice(0, 3).map((result: {title?: string; url?: string}) => 
+            ? searchResults.results.slice(0, isDeepDive ? 5 : 3).map((result: {title?: string; url?: string}) => 
                 `- ${result.title || 'Untitled'}: ${result.url || 'No URL'}`
               ).join('\n') 
             : 'No sources available';
+            
+          // Format content based on token price data availability
+          let tokenData = '';
+          if (token.price && token.price > 0) {
+            tokenData = `
+              Price: $${token.price.toFixed(6)}
+              24h Change: ${token.priceChange24h.toFixed(2)}%
+              24h Volume: $${(token.volume24h || 0).toLocaleString()}
+            `;
+          } else {
+            tokenData = 'No price data available for this token.\n';
+          }
           
           // Store the research in memory
           await this.memory.addNote({
             title: `Research: ${token.symbol}`,
             content: `
               Token: ${token.name} (${token.symbol})
-              Price: $${token.price.toFixed(6)}
-              24h Change: ${token.priceChange24h.toFixed(2)}%
+              ${tokenData}
               
               Research Summary:
               ${searchResults.answer || 'No summary available'}
               
+              ${additionalContext}
+              
               Sources:
               ${sourcesList}
+              
+              Research Time: ${new Date().toISOString()}
             `,
             category: 'research',
             tags: ["crypto", "token", String(token.symbol), "AI", "research"],
@@ -1062,6 +1278,12 @@ class AutonomousCryptoOpenAIAgent {
           });
           
           logger.info(`Saved research for ${token.symbol} to memory`);
+          
+          // For deep dive tokens, immediately initiate analysis
+          if (isDeepDive) {
+            await this.analyzeSpecificToken(token.symbol);
+          }
+          
         } catch (tokenError) {
           logger.error(`Error researching token ${token.symbol}`, tokenError);
         }
@@ -1112,18 +1334,19 @@ class AutonomousCryptoOpenAIAgent {
   }
   
   /**
-   * Analyze a specific token
+   * Analyze a specific token with enhanced insights
    * 
    * @param symbol - Token symbol
+   * @param tradeFocus - Optional flag to focus on trading opportunities
    */
-  private async analyzeSpecificToken(symbol: string): Promise<void> {
-    logger.info(`Analyzing token: ${symbol}`);
+  private async analyzeSpecificToken(symbol: string, tradeFocus: boolean = false): Promise<void> {
+    logger.info(`Analyzing token: ${symbol} ${tradeFocus ? '(trade focus)' : ''}`);
     
     try {
       // Fetch existing research
       const tokenResearch = await this.memory.searchNotes({
         query: `${symbol} research`,
-        limit: 1
+        limit: 2  // Get up to 2 research notes in case there are multiple
       });
       
       if (tokenResearch.length === 0) {
@@ -1131,38 +1354,108 @@ class AutonomousCryptoOpenAIAgent {
         return;
       }
       
-      // Generate prompt for analysis
-      const analysisPrompt = `
-        As a crypto analyst specializing in AI-related tokens, analyze this token:
+      // Check for existing analyses to avoid duplication
+      const existingAnalyses = await this.memory.searchNotes({
+        query: `Analysis: ${symbol}`,
+        limit: 1
+      });
+      
+      // Determine if we need a fresh analysis or update based on timestamp
+      let needsNewAnalysis = true;
+      
+      if (existingAnalyses.length > 0) {
+        const lastAnalysisTime = existingAnalyses[0].timestamp;
+        const currentTime = Date.now();
+        const hoursSinceLastAnalysis = (currentTime - lastAnalysisTime) / (1000 * 60 * 60);
         
-        ${tokenResearch[0].content}
+        // Only do a new analysis if it's been at least 12 hours since the last one
+        // or if we're specifically asked for a trade focus analysis
+        needsNewAnalysis = hoursSinceLastAnalysis >= 12 || tradeFocus;
         
-        Provide a comprehensive analysis focusing on:
-        1. Use case and technology overview
-        2. Market potential and adoption
-        3. Technical fundamentals
-        4. Development activity and team
-        5. Short and medium-term outlook
-        
-        Be objective and balanced in your assessment. Identify both strengths and weaknesses.
-      `;
+        if (!needsNewAnalysis) {
+          logger.info(`Recent analysis for ${symbol} exists (${hoursSinceLastAnalysis.toFixed(1)} hours ago), skipping`);
+          return;
+        }
+      }
+      
+      // Combine research if multiple notes exist
+      let combinedResearch = tokenResearch[0].content;
+      if (tokenResearch.length > 1) {
+        combinedResearch += "\n\nAdditional Research:\n" + tokenResearch[1].content;
+      }
+      
+      // Generate prompt for analysis - modify based on focus
+      let analysisPrompt: string;
+      
+      if (tradeFocus) {
+        analysisPrompt = `
+          As Wexley, a crypto analyst specializing in AI-related tokens, analyze this token for TRADING OPPORTUNITIES:
+          
+          ${combinedResearch}
+          
+          Provide a trading-focused analysis including:
+          1. Current price action and momentum
+          2. Key support and resistance levels
+          3. Short-term (1-7 days) price outlook with potential catalysts
+          4. Medium-term (1-4 weeks) outlook with reasons
+          5. Risk assessment and sentiment indicators
+          6. Specific levels to watch (entry, stop loss, take profit)
+          
+          Be objective and data-driven. Avoid generic statements without supporting evidence.
+          Focus on real insights for the crypto trading community.
+        `;
+      } else {
+        // Generate a more comprehensive fundamental analysis
+        analysisPrompt = `
+          As Wexley, a crypto analyst specializing in AI-related tokens, provide a comprehensive analysis:
+          
+          ${combinedResearch}
+          
+          Offer detailed insights on:
+          1. Project purpose and technology - What specific AI problem does this solve? How?
+          2. Market potential and competitive advantages - What's the addressable market? Why this solution?
+          3. Technical architecture and innovation - What's technically notable? Is it truly innovative?
+          4. Team competence and development activity - Is the team qualified? Active development?
+          5. Tokenomics and investment thesis - Is the token necessary? Value accrual mechanism?
+          6. Short and medium-term outlook with specific catalysts and risks
+          7. Comparative analysis against similar projects
+          
+          Be highly specific, balanced, and analytical. Identify both strengths and critical weaknesses.
+          Your reputation depends on substantiated insights rather than hype.
+        `;
+      }
       
       // Generate analysis using the autonomous agent
       const analysisResult = await this.autonomousAgent.runOperation<{ response: string }>(analysisPrompt);
       
+      // Add a clear analysis type
+      const analysisType = tradeFocus ? 'Trading Analysis' : 'Fundamental Analysis';
+      
       // Store the analysis in memory
-      await this.memory.addNote({
-        title: `Analysis: ${symbol}`,
+      const analysisId = await this.memory.addNote({
+        title: `Analysis: ${symbol} - ${analysisType}`,
         content: analysisResult.response,
         category: 'analysis',
-        tags: ['crypto', 'token', symbol, 'AI', 'analysis'],
+        tags: ['crypto', 'token', symbol, 'AI', 'analysis', tradeFocus ? 'trading' : 'fundamental'],
         timestamp: Date.now()
       });
       
-      logger.info(`Saved analysis for ${symbol} to memory`);
+      logger.info(`Saved ${analysisType} for ${symbol} to memory (ID: ${analysisId})`);
       
-      // Schedule a tweet about this analysis
-      this.scheduleTweetFromAnalysis(symbol, analysisResult.response);
+      // Schedule tweets about this analysis - more for trading analysis
+      if (tradeFocus) {
+        // For trade ideas, schedule multiple tweets (main idea + follow-ups)
+        // First tweet with the main trade thesis
+        await this.scheduleTweetFromAnalysis(symbol, analysisResult.response, false, 'trade');
+        
+        // Optional second tweet with specific levels (entry, targets, etc.)
+        setTimeout(async () => {
+          await this.scheduleTweetFromAnalysis(symbol, analysisResult.response, false, 'levels');
+        }, 3000);
+      } else {
+        // For fundamental analysis, just schedule one comprehensive tweet
+        await this.scheduleTweetFromAnalysis(symbol, analysisResult.response);
+      }
     } catch (error) {
       logger.error(`Error analyzing token ${symbol}`, error);
       throw error;
@@ -1175,8 +1468,14 @@ class AutonomousCryptoOpenAIAgent {
    * @param symbol - Token symbol
    * @param analysis - Token analysis
    * @param immediate - Optional flag to request immediate posting (default: false)
+   * @param tweetType - Optional type of tweet to generate (default: 'analysis')
    */
-  private async scheduleTweetFromAnalysis(symbol: string, analysis: string, immediate: boolean = false): Promise<void> {
+  private async scheduleTweetFromAnalysis(
+    symbol: string, 
+    analysis: string, 
+    immediate: boolean = false,
+    tweetType: 'analysis' | 'trade' | 'levels' | 'price' | 'news' = 'analysis'
+  ): Promise<void> {
     try {
       // Generate tweet content from analysis using the personality's tone and style
       const personalityName = this.personality.persona?.name || 'Wexley';
@@ -1185,25 +1484,134 @@ class AutonomousCryptoOpenAIAgent {
       const personalityTraits = 
         this.personality.persona?.personality?.traits || ['analytical', 'insightful'];
       
-      const tweetPrompt = `
-        Based on this analysis of ${symbol}:
-        
-        ${analysis.substring(0, 500)}...
-        
-        You are ${personalityName}, a crypto market analyst specializing in AI tokens.
-        Your expertise allows you to identify market patterns before others see them.
-        Your personality traits are: ${Array.isArray(personalityTraits) ? personalityTraits.join(', ') : 'analytical, confident'}.
-        
-        Create a concise, informative tweet (under 240 chars) that:
-        1. Mentions a specific insight about the token
-        2. Includes a substantiated opinion or prediction
-        3. Uses $${symbol} format
-        4. MUST NOT include any hashtags
-        5. Matches your sophisticated, confident but measured tone
-        6. Shows your technical expertise while remaining accessible
-        
-        Only return the tweet text.
-      `;
+      // Create different prompts based on tweet type
+      let tweetPrompt: string;
+      let priority: 'low' | 'medium' | 'high' = 'medium';
+      
+      // Extract key sections for the specific tweet types
+      const getAnalysisSection = (section: string): string => {
+        const sectionMatch = analysis.match(new RegExp(`${section}[:\\s]+(.*?)(?=\\n\\n|$)`, 's'));
+        return sectionMatch ? sectionMatch[1].trim().substring(0, 300) : '';
+      };
+      
+      switch (tweetType) {
+        case 'trade':
+          // Trading opportunity tweet
+          priority = 'high';
+          tweetPrompt = `
+            Based on this trading analysis of ${symbol}:
+            
+            ${analysis.substring(0, 600)}...
+            
+            You are ${personalityName}, a crypto market analyst specializing in AI tokens.
+            Your expertise allows you to identify profitable trading setups before others.
+            Your personality traits are: ${Array.isArray(personalityTraits) ? personalityTraits.join(', ') : 'analytical, confident'}.
+            
+            Create a concise, actionable trade idea tweet (under 240 chars) that:
+            1. Clearly presents your trading thesis for $${symbol}
+            2. Mentions current price action and direction 
+            3. Includes a specific prediction or outlook
+            4. Uses professional trading language that's still accessible
+            5. Projects confidence without being reckless
+            6. MUST NOT include hashtags or generic statements
+            
+            Only return the tweet text with no additional commentary.
+          `;
+          break;
+          
+        case 'levels':
+          // Price levels and targets tweet
+          priority = 'medium';
+          tweetPrompt = `
+            Based on this trading analysis of ${symbol}:
+            
+            ${analysis.substring(0, 600)}...
+            
+            You are ${personalityName}, a crypto market analyst.
+            Your personality traits are: ${Array.isArray(personalityTraits) ? personalityTraits.join(', ') : 'analytical, confident'}.
+            
+            Create a follow-up tweet (under 240 chars) about $${symbol} that:
+            1. SPECIFICALLY focuses on key price levels to watch
+            2. Mentions support/resistance and target areas if available
+            3. Explains potential scenarios at these levels
+            4. Uses precise price figures when available
+            5. MUST NOT include any hashtags
+            6. Shows your detailed technical analysis expertise
+            
+            Only return the tweet text.
+          `;
+          break;
+          
+        case 'price':
+          // Price movement update tweet
+          priority = 'high';
+          tweetPrompt = `
+            Based on this analysis of ${symbol}:
+            
+            ${analysis.substring(0, 400)}...
+            
+            You are ${personalityName}, a crypto market analyst specializing in AI tokens.
+            Your personality traits are: ${Array.isArray(personalityTraits) ? personalityTraits.join(', ') : 'analytical, confident'}.
+            
+            Create a price movement tweet (under 240 chars) that:
+            1. Highlights recent significant price movement for $${symbol}
+            2. Explains WHY this movement is happening (catalyst, event)
+            3. Provides context on whether this validates or contradicts your previous analysis
+            4. Projects forward by one timeframe (hour→day, day→week)
+            5. MUST NOT include any hashtags
+            6. Uses specific price data and percentages
+            
+            Only return the tweet text.
+          `;
+          break;
+          
+        case 'news':
+          // News and development update tweet
+          priority = 'medium';
+          tweetPrompt = `
+            Based on this analysis of ${symbol}:
+            
+            ${analysis.substring(0, 500)}...
+            
+            You are ${personalityName}, a crypto market analyst specializing in AI tokens.
+            Your personality traits are: ${Array.isArray(personalityTraits) ? personalityTraits.join(', ') : 'analytical, confident'}.
+            
+            Create a crypto news/development update tweet (under 240 chars) that:
+            1. Highlights a specific development or news item related to $${symbol}
+            2. Explains why this matters for the project's future
+            3. Provides insight on potential market impact
+            4. References technical or fundamental data points
+            5. MUST NOT include any hashtags
+            6. Shows your deep industry knowledge
+            
+            Only return the tweet text.
+          `;
+          break;
+          
+        case 'analysis':
+        default:
+          // Default fundamental analysis tweet
+          priority = 'medium';
+          tweetPrompt = `
+            Based on this analysis of ${symbol}:
+            
+            ${analysis.substring(0, 500)}...
+            
+            You are ${personalityName}, a crypto market analyst specializing in AI tokens.
+            Your expertise allows you to identify market patterns before others see them.
+            Your personality traits are: ${Array.isArray(personalityTraits) ? personalityTraits.join(', ') : 'analytical, confident'}.
+            
+            Create a concise, informative tweet (under 240 chars) that:
+            1. Mentions a specific insight about the token
+            2. Includes a substantiated opinion or prediction
+            3. Uses $${symbol} format
+            4. MUST NOT include any hashtags
+            5. Matches your sophisticated, confident but measured tone
+            6. Shows your technical expertise while remaining accessible
+            
+            Only return the tweet text.
+          `;
+      }
       
       // Generate tweet using base agent for reliability
       const tweetResult = await this.baseAgent.run({ task: tweetPrompt });
@@ -1211,18 +1619,25 @@ class AutonomousCryptoOpenAIAgent {
       // Schedule the tweet (immediate or based on schedule)
       const scheduledTime = this.getNextTweetTime(immediate);
       
+      // Add some variety to tweet scheduling - stagger follow-up tweets
+      let actualScheduleTime = scheduledTime;
+      if (tweetType === 'levels') {
+        // Schedule levels tweet 20-40 minutes after the main trade tweet
+        actualScheduleTime = scheduledTime + (Math.floor(Math.random() * 20) + 20) * 60 * 1000;
+      }
+      
       this.contentManager.addTweetIdea({
-        topic: `${symbol} analysis`,
+        topic: `${symbol} ${tweetType}`,
         content: tweetResult.response,
         status: 'approved',
-        priority: 'high', // Only use valid priority values
-        scheduledFor: scheduledTime,
-        tags: ['analysis', symbol, 'AI', 'crypto']
+        priority,
+        scheduledFor: actualScheduleTime,
+        tags: ['analysis', symbol, 'AI', 'crypto', tweetType]
       });
       
-      logger.info(`Scheduled tweet about ${symbol} for ${new Date(scheduledTime).toLocaleString()}`);
+      logger.info(`Scheduled ${tweetType} tweet about ${symbol} for ${new Date(actualScheduleTime).toLocaleString()}`);
     } catch (error) {
-      logger.error(`Error scheduling tweet for ${symbol}`, error);
+      logger.error(`Error scheduling ${tweetType} tweet for ${symbol}`, error);
     }
   }
   
@@ -1614,11 +2029,199 @@ class AutonomousCryptoOpenAIAgent {
   }
   
   /**
+   * Execute a specialized token discovery task to find new promising tokens
+   * This can be called periodically or triggered through a schedule
+   */
+  async executeTokenDiscoveryTask(): Promise<void> {
+    logger.info('Executing specialized token discovery task');
+    
+    try {
+      // Use more advanced discovery techniques beyond just trending tokens
+      
+      // TECHNIQUE 1: Search for recent crypto news articles about new AI projects
+      const newsQuery = "newest AI crypto projects launched funding announcement";
+      const newsResults = await this.searchTool.execute({
+        query: newsQuery,
+        maxResults: 5,
+        includeAnswer: true
+      });
+      
+      // TECHNIQUE 2: Search for upcoming AI crypto token launches 
+      const upcomingQuery = "upcoming AI crypto token launches this month";
+      const upcomingResults = await this.searchTool.execute({
+        query: upcomingQuery,
+        maxResults: 5,
+        includeAnswer: true
+      });
+      
+      // TECHNIQUE 3: Look for Solana AI ecosystem projects specifically
+      const solanaQuery = "solana AI ecosystem projects tokens";
+      const solanaResults = await this.searchTool.execute({
+        query: solanaQuery,
+        maxResults: 5,
+        includeAnswer: true
+      });
+      
+      // Extract token mentions from all results
+      const extractTokens = (text: string): string[] => {
+        if (!text) return [];
+        
+        // Extract tokens mentioned with $ symbol
+        const dollarMatches = text.match(/\$([A-Z0-9]{2,})/g) || [];
+        const dollarTokens = dollarMatches.map((m: string) => m.substring(1));
+        
+        // Also look for tokens mentioned in typical formats
+        const patternMatches = text.match(/\b([A-Z]{2,})\s+(?:token|coin|crypto)/gi) || [];
+        const patternTokens = patternMatches.map((m: string) => m.split(/\s+/)[0].toUpperCase());
+        
+        // Combine and deduplicate
+        return [...new Set([...dollarTokens, ...patternTokens])];
+      };
+      
+      // Process all discovery results
+      const discoveredTokens: Set<string> = new Set();
+      
+      // Extract tokens from each result set
+      [newsResults, upcomingResults, solanaResults].forEach(result => {
+        if (result.answer) {
+          extractTokens(result.answer).forEach(token => discoveredTokens.add(token));
+        }
+        
+        // Also check individual search results
+        if (Array.isArray(result.results)) {
+          result.results.forEach((item: any) => {
+            if (item.content) {
+              extractTokens(item.content).forEach(token => discoveredTokens.add(token));
+            }
+          });
+        }
+      });
+      
+      // Filter out common false positives and non-token mentions
+      const falsePositives = ['AI', 'ML', 'API', 'NFT', 'CEO', 'CTO', 'DUE', 'ICO', 'IDO', 'APY', 'APR', 'TVL'];
+      const filteredTokens = Array.from(discoveredTokens).filter(token => 
+        !falsePositives.includes(token) && 
+        token.length >= 2 && 
+        token.length <= 6
+      );
+      
+      logger.info(`Discovered ${filteredTokens.length} potential new tokens: ${filteredTokens.join(', ')}`);
+      
+      // Create a consolidated research summary
+      const discoveryContent = `
+        Discovery Summary - New AI Crypto Tokens
+        
+        Discovery Time: ${new Date().toISOString()}
+        
+        Discovered Tokens: ${filteredTokens.join(', ')}
+        
+        News Sources Summary:
+        ${newsResults.answer || 'No summary available'}
+        
+        Upcoming Projects:
+        ${upcomingResults.answer || 'No summary available'}
+        
+        Solana AI Ecosystem:
+        ${solanaResults.answer || 'No summary available'}
+      `;
+      
+      // Store the discovery in memory
+      await this.memory.addNote({
+        title: `Token Discovery: AI Projects`,
+        content: discoveryContent,
+        category: 'discovery',
+        tags: ["crypto", "discovery", "AI", "new tokens"],
+        timestamp: Date.now()
+      });
+      
+      logger.info(`Saved token discovery results to memory`);
+      
+      // Research the most promising tokens
+      for (const token of filteredTokens.slice(0, 3)) {
+        try {
+          // Create a research task for each promising token
+          await this.executeResearchTask({
+            description: `Research discovered token: ${token}`,
+            type: "research"
+          });
+          
+          // Allow some time between research tasks
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        } catch (tokenError) {
+          logger.error(`Error researching discovered token ${token}`, tokenError);
+        }
+      }
+      
+      // Create a tweet about the discovery
+      const discoveryTweetPrompt = `
+        As a crypto analyst specializing in AI tokens, you've just discovered some interesting new AI crypto projects.
+        
+        Here's what you found:
+        ${discoveryContent.substring(0, 500)}...
+        
+        Create an exciting "alpha leak" style tweet (under 240 chars) that:
+        1. Mentions you're tracking several promising new AI projects
+        2. Specifically mentions 1-2 of these symbols: ${filteredTokens.slice(0, 3).join(', ')}
+        3. Hints at potential opportunities without making price predictions
+        4. Positions yourself as having inside knowledge
+        5. MUST use $ symbol for token tickers
+        6. MUST NOT include hashtags
+        
+        Only return the tweet text.
+      `;
+      
+      try {
+        const tweetResult = await this.baseAgent.run({ task: discoveryTweetPrompt });
+        
+        this.contentManager.addTweetIdea({
+          topic: `New AI Token Discovery`,
+          content: tweetResult.response,
+          status: 'approved',
+          priority: 'high',
+          scheduledFor: this.getNextTweetTime(false),
+          tags: ['discovery', 'AI', 'crypto', 'alpha']
+        });
+        
+        logger.info(`Scheduled tweet about new token discoveries`);
+      } catch (tweetError) {
+        logger.error('Error creating discovery tweet', tweetError);
+      }
+      
+    } catch (error) {
+      logger.error('Error in token discovery task', error);
+      throw error;
+    }
+  }
+  
+  /**
    * Get current status of the agent
    */
   getStatus(): any {
     const agentStatus = this.autonomousAgent.getStatus();
     const tweetIdeas = this.contentManager.getTweetIdeas();
+    
+    // Get memory stats
+    let memoryStats = {
+      totalNotes: 0,
+      researchNotes: 0, 
+      analysisNotes: 0,
+      discoveryNotes: 0
+    };
+    
+    // Try to get memory stats but don't fail if there's an error
+    try {
+      this.memory.getAllNotes().then(notes => {
+        memoryStats.totalNotes = notes.length;
+        memoryStats.researchNotes = notes.filter(note => note.category === 'research').length;
+        memoryStats.analysisNotes = notes.filter(note => note.category === 'analysis').length;
+        memoryStats.discoveryNotes = notes.filter(note => note.category === 'discovery').length;
+      }).catch(e => {
+        logger.warn('Error getting memory stats', e);
+      });
+    } catch (e) {
+      // Just log and continue
+      logger.warn('Error accessing memory stats', e);
+    }
     
     return {
       isRunning: this.isRunning,
@@ -1628,6 +2231,7 @@ class AutonomousCryptoOpenAIAgent {
       scheduledTweets: tweetIdeas.filter(idea => idea.status === 'approved').length,
       postedTweets: tweetIdeas.filter(idea => idea.status === 'posted').length,
       draftTweets: tweetIdeas.filter(idea => idea.status === 'draft').length,
+      memory: memoryStats,
       settings: this.settings
     };
   }
