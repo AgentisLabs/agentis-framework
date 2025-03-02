@@ -958,4 +958,140 @@ export class BrowserTwitterConnector extends EventEmitter {
     this.logger.warn('Follow functionality not fully implemented in browser-only version');
     // Would be implemented using browser automation to navigate to the user's profile and click follow
   }
+  
+  /**
+   * Gets a tweet by ID using browser automation
+   * 
+   * @param tweetId - The ID of the tweet to fetch
+   * @returns Promise resolving to the tweet object
+   */
+  async getTweet(tweetId: string): Promise<Tweet> {
+    if (!this.connected || !this.page || !this.browser) {
+      throw new Error('Not connected to Twitter');
+    }
+    
+    this.logger.debug(`Fetching tweet with ID: ${tweetId}`);
+    
+    try {
+      // For tweet IDs created by our own system
+      if (tweetId.startsWith('tweet_posted_')) {
+        // Extract timestamp from ID if possible
+        const timestamp = parseInt(tweetId.split('_')[2] || '0');
+        const createdAt = timestamp ? new Date(timestamp) : new Date();
+        
+        // Return a synthetic tweet object when we can't fetch the actual tweet
+        return {
+          id: tweetId,
+          text: "This is a synthetic tweet object as the actual tweet couldn't be fetched",
+          author: {
+            username: this.config.username || 'unknown',
+            name: this.config.username || 'Unknown User',
+          },
+          createdAt,
+          isRetweet: false,
+          isReply: false
+        };
+      }
+      
+      // For actual Twitter IDs, attempt to fetch the tweet
+      // Note: This would require additional browser automation to visit the tweet page
+      // and extract information from the page HTML
+      
+      // In a full implementation, we would navigate to the tweet URL and scrape the content
+      const tweetUrl = `https://twitter.com/i/status/${tweetId}`;
+      
+      this.logger.debug(`Navigating to tweet URL: ${tweetUrl}`);
+      
+      // Navigate to the tweet page
+      await this.page.goto(tweetUrl, { waitUntil: 'networkidle2' });
+      // Use setTimeout instead of page.waitForTimeout which isn't available in all Puppeteer versions
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Extract tweet text - this selector might need adjustment based on Twitter's current DOM
+      const tweetTextElement = await this.page.$('[data-testid="tweetText"]');
+      let tweetText = '';
+      
+      if (tweetTextElement) {
+        tweetText = await this.page.evaluate(el => el.textContent, tweetTextElement) || '';
+      } else {
+        this.logger.warn('Could not find tweet text element');
+        // Try alternative selectors
+        const articleElement = await this.page.$('article');
+        if (articleElement) {
+          tweetText = await this.page.evaluate(el => el.textContent, articleElement) || '';
+          // Clean up the text to remove excess information
+          tweetText = tweetText.replace(/\\s+/g, ' ').trim();
+        }
+      }
+      
+      // Extract author information
+      const authorElement = await this.page.$('[data-testid="User-Name"]');
+      let authorName = '';
+      let authorUsername = '';
+      
+      if (authorElement) {
+        const authorInfo = await this.page.evaluate(el => {
+          // Try to find the author name and username elements
+          const nameEl = el.querySelector('span');
+          const usernameEl = el.querySelector('span:nth-child(2)');
+          
+          return {
+            name: nameEl ? (nameEl.textContent || '') : '',
+            username: usernameEl ? (usernameEl.textContent || '').replace('@', '') : ''
+          };
+        }, authorElement);
+        
+        authorName = authorInfo.name || '';
+        authorUsername = authorInfo.username || '';
+      } else {
+        this.logger.warn('Could not find author element');
+        // Default to configured username
+        authorName = this.config.username || 'Unknown User';
+        authorUsername = this.config.username || 'unknown';
+      }
+      
+      // Extract timestamp (this is a simplified approach)
+      const timestampElement = await this.page.$('time');
+      let createdAt = new Date();
+      
+      if (timestampElement) {
+        const datetimeAttr = await this.page.evaluate(el => el.getAttribute('datetime'), timestampElement);
+        if (datetimeAttr) {
+          createdAt = new Date(datetimeAttr);
+        }
+      }
+      
+      // Determine if it's a reply by checking for "Replying to" text
+      const isReply = await this.page.evaluate(() => {
+        return document.body.textContent?.includes('Replying to') || false;
+      });
+      
+      return {
+        id: tweetId,
+        text: tweetText || 'Could not extract tweet text',
+        author: {
+          username: authorUsername,
+          name: authorName,
+        },
+        createdAt,
+        isReply,
+        isRetweet: false, // Simplified - would need more logic to determine this accurately
+      };
+    } catch (error) {
+      this.logger.error(`Error fetching tweet ${tweetId}`, error);
+      
+      // Return a fallback tweet object
+      return {
+        id: tweetId,
+        text: "Could not fetch tweet content",
+        author: {
+          username: this.config.username || 'unknown',
+          name: this.config.username || 'Unknown User',
+        },
+        createdAt: new Date(),
+        isRetweet: false,
+        isReply: false
+      };
+    }
+  }
 }

@@ -683,33 +683,65 @@ export class TwitterContentManager {
       }
       
       try {
-        // Get the tweet and its replies
-        const tweet = await this.twitter.getTweet(tweetId);
-        
-        // TODO: In a real implementation, we would get replies and analyze sentiment
-        // This is a placeholder for that functionality
-        const randomEngagement = {
-          likes: Math.floor(Math.random() * 10),
-          retweets: Math.floor(Math.random() * 3),
-          replies: Math.floor(Math.random() * 5)
-        };
-        
-        // Update the tweet idea with engagement metrics
-        const tweetIdea = this.tweetIdeas.find(idea => 
-          idea.status === 'posted' && 
-          idea.content.includes(tweet.text.substring(0, 50))
-        );
-        
-        if (tweetIdea) {
-          tweetIdea.engagement = randomEngagement;
-        }
-        
-        // Update metrics
-        metrics.lastChecked = now;
-        
-        // If the tweet is older than 24 hours, mark as inactive
-        if (new Date(tweet.createdAt).getTime() < oneDayAgo) {
-          metrics.isActive = false;
+        // Check if getTweet method exists on the twitter connector
+        if (typeof this.twitter.getTweet === 'function') {
+          // Get the tweet and its replies
+          const tweet = await this.twitter.getTweet(tweetId);
+          
+          // TODO: In a real implementation, we would get replies and analyze sentiment
+          // This is a placeholder for that functionality
+          const randomEngagement = {
+            likes: Math.floor(Math.random() * 10),
+            retweets: Math.floor(Math.random() * 3),
+            replies: Math.floor(Math.random() * 5)
+          };
+          
+          // Update the tweet idea with engagement metrics
+          const tweetIdea = this.tweetIdeas.find(idea => 
+            idea.status === 'posted' && 
+            idea.content.includes(tweet.text.substring(0, 50))
+          );
+          
+          if (tweetIdea) {
+            tweetIdea.engagement = randomEngagement;
+          }
+          
+          // Update metrics
+          metrics.lastChecked = now;
+          
+          // If the tweet is older than 24 hours, mark as inactive
+          if (new Date(tweet.createdAt).getTime() < oneDayAgo) {
+            metrics.isActive = false;
+          }
+        } else {
+          // Handle case where getTweet is not available (e.g. with BrowserTwitterConnector)
+          this.logger.debug(`getTweet method not available on twitter connector, using fallback metrics for ${tweetId}`);
+          
+          // Generate random engagement metrics as fallback
+          const randomEngagement = {
+            likes: Math.floor(Math.random() * 10),
+            retweets: Math.floor(Math.random() * 3),
+            replies: Math.floor(Math.random() * 5)
+          };
+          
+          // Find matching tweet idea by ID pattern
+          const tweetIdea = this.tweetIdeas.find(idea => 
+            idea.status === 'posted' && 
+            (idea.id?.includes(tweetId) || tweetId.includes(idea.id || ''))
+          );
+          
+          if (tweetIdea) {
+            tweetIdea.engagement = randomEngagement;
+          }
+          
+          // Update metrics
+          metrics.lastChecked = now;
+          
+          // Mark as inactive after 24 hours based on metrics creation time
+          const tweetCreationTime = parseInt(tweetId.split('_')[2] || '0');
+          if (tweetCreationTime > 0 && tweetCreationTime < oneDayAgo) {
+            metrics.isActive = false;
+          }
         }
       } catch (error) {
         this.logger.error(`Error updating metrics for tweet ${tweetId}`, error);

@@ -43,3 +43,6 @@ data/
 *.png
 *.md
 
+.json
+agent-twitter.md
+roadmap.md
