@@ -965,16 +965,38 @@ export class BrowserTwitterConnector extends EventEmitter {
         // Short delay between checks
         await new Promise(resolve => setTimeout(resolve, 2000));
         
-        // STEP 2: Check for replies to our tweets
-        await this.checkForReplies();
-        
-        // STEP 3: Check general timeline for keywords
+        // STEP 2: Check general timeline for keywords
         await this.checkGeneralTimeline();
+        
+        // STEP 3: Check for replies to our tweets (less frequently)
+        // Only run this check every 3rd cycle to avoid too many navigation operations
+        const now = Date.now();
+        if (now % 3 === 0) {
+          await this.safelyCheckForReplies();
+        }
         
       } catch (error) {
         this.logger.error('Error monitoring Twitter interactions', error);
       }
     }, this.config.pollInterval || 60000);
+  }
+  
+  /**
+   * Safely check for replies with error handling and recovery
+   */
+  private async safelyCheckForReplies(): Promise<void> {
+    try {
+      await this.checkForReplies();
+    } catch (error) {
+      this.logger.error('Error checking replies, will retry next monitoring cycle', error);
+      
+      // Ensure we return to the home page to recover from any navigation issues
+      try {
+        await this.page!.goto('https://twitter.com/home', { waitUntil: 'networkidle2' });
+      } catch (navigationError) {
+        this.logger.error('Failed to navigate back to home page after error', navigationError);
+      }
+    }
   }
   
   /**
@@ -1055,7 +1077,7 @@ export class BrowserTwitterConnector extends EventEmitter {
   }
   
   /**
-   * Check for replies to our tweets
+   * Check for replies to our tweets (improved version)
    */
   private async checkForReplies(): Promise<void> {
     try {
@@ -1065,29 +1087,54 @@ export class BrowserTwitterConnector extends EventEmitter {
       await this.page!.goto(`https://twitter.com/${this.config.username}`, { waitUntil: 'networkidle2' });
       await new Promise(resolve => setTimeout(resolve, 3000));
       
-      // Get our most recent tweets
+      // Find our most recent tweets
       const myTweets = await this.page!.$$('article[data-testid="tweet"]');
+      this.logger.debug(`Found ${myTweets.length} tweets on our profile`);
       
-      // For each of our tweets, check replies
-      for (let i = 0; i < Math.min(myTweets.length, 3); i++) { // Only check replies to 3 most recent tweets
-        const tweet = myTweets[i];
-        
-        // Click on the tweet to view thread with replies
+      // Process up to 3 most recent tweets
+      for (let i = 0; i < Math.min(myTweets.length, 3); i++) {
         try {
-          await tweet.click();
+          // Extract tweet ID directly without clicking
+          const tweet = myTweets[i];
+          if (!tweet) {
+            this.logger.debug(`Tweet at index ${i} is undefined, skipping`);
+            continue;
+          }
+          
+          // Extract the tweet ID from its URL
+          const tweetId = await tweet.evaluate((el: HTMLElement) => {
+            const articleLinks = Array.from(el.querySelectorAll('a[href*="/status/"]'));
+            for (const link of articleLinks) {
+              const href = link.getAttribute('href') || '';
+              const match = href.match(/\/status\/(\d+)/);
+              if (match) return match[1];
+            }
+            return '';
+          }).catch(e => {
+            this.logger.error('Error extracting tweet ID', e);
+            return '';
+          });
+          
+          if (!tweetId) {
+            this.logger.warn('Could not extract tweet ID from tweet element, skipping');
+            continue;
+          }
+          
+          this.logger.debug(`Processing tweet ID: ${tweetId}`);
+          
+          // Navigate directly to the tweet's page instead of clicking
+          await this.page!.goto(`https://twitter.com/i/status/${tweetId}`, { waitUntil: 'networkidle2' });
           await new Promise(resolve => setTimeout(resolve, 3000));
           
-          // Get the tweet ID from URL
-          const url = await this.page!.url();
-          const statusMatch = url.match(/\/status\/(\d+)/);
-          const originalTweetId = statusMatch ? statusMatch[1] : '';
+          // Get all replies (these should be articles below the main tweet)
+          const replies = await this.page!.$$('article[data-testid="tweet"]:not(:first-child)');
+          this.logger.debug(`Found ${replies.length} possible replies to tweet ${tweetId}`);
           
-          if (originalTweetId) {
-            // Get all replies (these will be articles below the main tweet)
-            const replies = await this.page!.$$('article[data-testid="tweet"]:not(:first-child)');
-            
-            for (let j = 0; j < Math.min(replies.length, 5); j++) { // Process up to 5 replies
+          // Process up to 5 replies
+          for (let j = 0; j < Math.min(replies.length, 5); j++) {
+            try {
               const reply = replies[j];
+              if (!reply) continue;
               
               // Extract reply ID
               const replyId = await reply.evaluate((el: HTMLElement) => {
@@ -1098,66 +1145,86 @@ export class BrowserTwitterConnector extends EventEmitter {
                   if (match) return match[1];
                 }
                 return '';
-              });
+              }).catch(() => '');
               
-              // Skip if already processed
-              if (this.processedTweets.has(replyId)) {
+              // Skip if already processed or ID extraction failed
+              if (!replyId || this.processedTweets.has(replyId)) {
                 continue;
               }
               
-              // Extract text and author
-              const replyText = await reply.$eval('[data-testid="tweetText"]', (el: Element) => el.textContent || '')
-                .catch(() => '');
-                
-              const authorElement = await reply.$('div[data-testid="User-Name"]');
-              const authorName = authorElement ? await authorElement.evaluate((el: Element) => el.textContent || '') : 'Unknown';
+              // Extract text
+              let replyText = '';
+              try {
+                const textElement = await reply.$('[data-testid="tweetText"]');
+                if (textElement) {
+                  replyText = await textElement.evaluate(el => el.textContent || '');
+                }
+              } catch (textError) {
+                this.logger.debug('Error extracting reply text', textError);
+              }
               
-              // Extract username
-              const usernameMatch = authorName.match(/@(\w+)/);
-              const username = usernameMatch ? usernameMatch[1] : '';
+              // Extract author
+              let authorName = 'Unknown';
+              let username = '';
+              try {
+                const authorElement = await reply.$('div[data-testid="User-Name"]');
+                if (authorElement) {
+                  authorName = await authorElement.evaluate(el => el.textContent || '');
+                  const usernameMatch = authorName.match(/@(\w+)/);
+                  username = usernameMatch ? usernameMatch[1] : '';
+                }
+              } catch (authorError) {
+                this.logger.debug('Error extracting author', authorError);
+              }
               
               // Skip if it's our own reply
-              if (username.toLowerCase() !== this.config.username?.toLowerCase()) {
-                this.logger.info(`Found reply from @${username} to our tweet ${originalTweetId}: ${replyText}`);
-                
-                // Add to processed list
-                this.processedTweets.add(replyId);
-                
-                // Emit reply event
-                this.emit('reply', {
-                  id: replyId,
-                  text: replyText,
-                  author: authorName,
-                  username: username,
-                  type: 'reply',
-                  originalTweetId: originalTweetId,
-                  timestamp: new Date().toISOString()
-                });
-                
-                // Auto-reply if enabled
-                if (this.config.autoReply && this.agent) {
-                  const responseText = await this.generateReply(replyText, authorName, 'reply', originalTweetId);
-                  if (responseText && replyId) {
-                    await this.replyToTweet(replyId, responseText);
-                  }
+              if (username.toLowerCase() === this.config.username?.toLowerCase()) {
+                continue;
+              }
+              
+              // Record and process the reply
+              this.logger.info(`Found reply from @${username} to tweet ${tweetId}: ${replyText}`);
+              
+              // Add to processed list
+              this.processedTweets.add(replyId);
+              
+              // Emit reply event
+              this.emit('reply', {
+                id: replyId,
+                text: replyText,
+                author: authorName,
+                username: username,
+                type: 'reply',
+                originalTweetId: tweetId,
+                timestamp: new Date().toISOString()
+              });
+              
+              // Auto-reply if enabled
+              if (this.config.autoReply && this.agent) {
+                const responseText = await this.generateReply(replyText, authorName, 'reply', tweetId);
+                if (responseText && replyId) {
+                  await this.replyToTweet(replyId, responseText);
                 }
               }
+            } catch (replyError) {
+              this.logger.error(`Error processing reply ${j} to tweet ${tweetId}`, replyError);
             }
           }
           
-          // Go back to our profile
+          // Return to profile before processing next tweet
           await this.page!.goto(`https://twitter.com/${this.config.username}`, { waitUntil: 'networkidle2' });
           await new Promise(resolve => setTimeout(resolve, 2000));
           
-        } catch (clickError) {
-          this.logger.error('Error clicking tweet to check replies', clickError);
-          // Return to profile and continue with next tweet
+        } catch (tweetError) {
+          this.logger.error(`Error processing tweet at index ${i}`, tweetError);
+          // Try to recover and continue with next tweet
           await this.page!.goto(`https://twitter.com/${this.config.username}`, { waitUntil: 'networkidle2' });
           await new Promise(resolve => setTimeout(resolve, 2000));
         }
       }
     } catch (error) {
       this.logger.error('Error checking replies', error);
+      throw error; // Let the caller handle recovery
     }
   }
   

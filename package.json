@@ -23,7 +23,8 @@
     "dependency-demo": "ts-node -r tsconfig-paths/register examples/dependency-inference-demo.ts",
     "integrated-demo": "ts-node -r tsconfig-paths/register examples/integrated-showcase.ts",
     "feedback-demo": "ts-node -r tsconfig-paths/register examples/feedback-demo.ts",
-    "stock-research": "ts-node -r tsconfig-paths/register examples/stock-research-team.ts"
+    "stock-research": "ts-node -r tsconfig-paths/register examples/stock-research-team.ts",
+    "crypto-agent": "ts-node -r tsconfig-paths/register examples/autonomous-crypto-openai-agent-fixed.ts"
   },
   "keywords": [
     "ai",

@@ -56,6 +56,12 @@ const MEMORY_DIR = path.join(DATA_DIR, 'memory');
 const PINECONE_INDEX = process.env.PINECONE_INDEX || 'crypto-agent-memory';
 const PINECONE_NAMESPACE = process.env.PINECONE_NAMESPACE || 'crypto-analysis';
 
+// Autonomous behavior configuration - can be toggled via environment variables
+const ENABLE_AUTONOMOUS_RESEARCH = process.env.ENABLE_AUTONOMOUS_RESEARCH !== 'false'; // Default to true
+const ENABLE_SPONTANEOUS_TWEETS = process.env.ENABLE_SPONTANEOUS_TWEETS !== 'false'; // Default to true
+const MAX_AUTONOMOUS_RESEARCH_DEPTH = parseInt(process.env.MAX_AUTONOMOUS_RESEARCH_DEPTH || '3'); // Default to 3 levels
+const MIN_SPONTANEOUS_TWEET_INTERVAL_HOURS = parseFloat(process.env.MIN_SPONTANEOUS_TWEET_INTERVAL_HOURS || '1'); // Default to 1 hour
+
 // Ensure directories exist
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 if (!fs.existsSync(AGENT_STATE_DIR)) fs.mkdirSync(AGENT_STATE_DIR, { recursive: true });
@@ -222,13 +228,20 @@ class AutonomousCryptoOpenAIAgent {
   private isRunning: boolean = false;
   private currentGoals: string[] = [];
   private currentTasks: Array<{description: string; type?: string}> = [];
+  private lastSpontaneousTweetTime: number = 0;
+  private autonomousResearchRunning: boolean = false;
   
   // Default settings
   private settings = {
     tweetFrequencyHours: 1, // Tweet every hour
     analysisFrequencyHours: 2,
     researchDepth: 'medium',
-    focusAreas: ['AI', 'artificial intelligence', 'ML', 'machine learning', 'data', 'analytics']
+    focusAreas: ['AI', 'artificial intelligence', 'ML', 'machine learning', 'data', 'analytics'],
+    // Autonomous behavior settings
+    enableAutonomousResearch: ENABLE_AUTONOMOUS_RESEARCH,
+    enableSpontaneousTweets: ENABLE_SPONTANEOUS_TWEETS,
+    maxAutonomousResearchDepth: MAX_AUTONOMOUS_RESEARCH_DEPTH,
+    minSpontaneousTweetIntervalHours: MIN_SPONTANEOUS_TWEET_INTERVAL_HOURS
   };
   
   /**
@@ -1075,6 +1088,18 @@ class AutonomousCryptoOpenAIAgent {
           }
         }, tradingAnalysisIntervalMs);
       }, 30 * 60 * 1000);
+      
+      // Set up autonomous exploration to run randomly
+      if (this.settings.enableAutonomousResearch) {
+        // Initial autonomous exploration after startup (around 15-30 minutes)
+        const initialDelay = 15 * 60 * 1000 + Math.random() * 15 * 60 * 1000;
+        setTimeout(() => {
+          this.startAutonomousExploration();
+        }, initialDelay);
+        
+        // Also schedule random exploration throughout the day
+        this.scheduleRandomExploration();
+      }
     } catch (error) {
       logger.error('Failed to start agent', error);
       throw error;
@@ -1309,17 +1334,24 @@ class AutonomousCryptoOpenAIAgent {
   }
   
   /**
-   * Execute a research task
+   * Execute a research task with enhanced discovery capabilities 
+   * and autonomous exploration behavior
    * 
    * @param task - Research task
+   * @param maxDepth - Max depth of autonomous exploration (default: 2)
+   * @param isAutonomousResearch - Whether this is an autonomous research call (internal)
+   * @param interestingPoints - Points of interest from previous research (internal)
    */
-  /**
-   * Execute a research task with enhanced discovery capabilities
-   * 
-   * @param task - Research task
-   */
-  private async executeResearchTask(task: {description: string; type?: string}): Promise<void> {
-    logger.info(`Executing research task: ${task.description}`);
+  private async executeResearchTask(
+    task: {description: string; type?: string},
+    maxDepth: number = 2,
+    isAutonomousResearch: boolean = false,
+    interestingPoints: string[] = []
+  ): Promise<string[]> {
+    logger.info(`Executing research task: ${task.description}${isAutonomousResearch ? ' (autonomous)' : ''}`);
+    
+    // Track interesting findings for follow-up research
+    let newInterestingPoints: string[] = [];
     
     try {
       // Determine research strategy based on task description
@@ -1363,21 +1395,26 @@ class AutonomousCryptoOpenAIAgent {
       }
       
       // STRATEGY 3: Discover new tokens via web research
-      if (isDiscoveryMode) {
-        // Perform specialized search for discovering new AI crypto projects
-        const discoverQueries = [
-          "newest AI crypto tokens launched this month",
-          "promising new AI blockchain projects",
-          "upcoming AI crypto token launches",
-          "AI crypto projects with recent fundraising",
-          "solana AI tokens new projects"
-        ];
+      if (isDiscoveryMode || isAutonomousResearch) {
+        // If this is autonomous research based on previous findings, use them as queries
+        const discoverQueries = isAutonomousResearch && interestingPoints.length > 0 
+          ? interestingPoints 
+          : [
+              "newest AI crypto tokens launched this month",
+              "promising new AI blockchain projects",
+              "upcoming AI crypto token launches",
+              "AI crypto projects with recent fundraising",
+              "solana AI tokens new projects"
+            ];
         
-        // Select two random queries to keep execution time reasonable
-        const selectedQueries = discoverQueries.sort(() => 0.5 - Math.random()).slice(0, 2);
+        // Select queries to keep execution time reasonable
+        const queryCount = isAutonomousResearch ? Math.min(3, interestingPoints.length) : 2;
+        const selectedQueries = discoverQueries.sort(() => 0.5 - Math.random()).slice(0, queryCount);
         
         for (const query of selectedQueries) {
           try {
+            logger.info(`Performing autonomous search on: "${query}"`);
+            
             const discoveryResults = await this.searchTool.execute({
               query,
               maxResults: 3,
@@ -1402,6 +1439,17 @@ class AutonomousCryptoOpenAIAgent {
                     volume24h: 0,
                     isDiscovered: true  // Mark as discovered for special handling
                   });
+                }
+              }
+              
+              // Extract interesting concepts for follow-up research
+              if (!isAutonomousResearch || maxDepth > 0) {
+                const interestingConcepts = await this.extractInterestingConcepts(discoveryResults.answer);
+                newInterestingPoints = [...newInterestingPoints, ...interestingConcepts];
+                
+                // Maybe post a spontaneous tweet if we found something really interesting
+                if (Math.random() < 0.3) { // 30% chance
+                  await this.maybeTweetInterestingFinding(discoveryResults.answer);
                 }
               }
             }
@@ -1468,6 +1516,13 @@ class AutonomousCryptoOpenAIAgent {
           
           logger.info(`Found ${searchResults.results?.length || 0} search results for ${token.symbol}`);
           
+          // Extract interesting concepts for autonomous follow-up
+          if (searchResults.answer && (!isAutonomousResearch || maxDepth > 0)) {
+            // Extract interesting concepts from the basic search results
+            const basicInterestingConcepts = await this.extractInterestingConcepts(searchResults.answer);
+            newInterestingPoints = [...newInterestingPoints, ...basicInterestingConcepts];
+          }
+          
           // STEP 2: For deep dives, gather additional technical and market info
           if (isDeepDive) {
             try {
@@ -1495,6 +1550,13 @@ class AutonomousCryptoOpenAIAgent {
                 Team & Development:
                 ${teamResults.answer || 'No team information available'}
               `;
+              
+              // Extract more interesting concepts from technical and team results
+              if (technicalResults.answer && teamResults.answer && (!isAutonomousResearch || maxDepth > 0)) {
+                const combinedAnswer = technicalResults.answer + "\n\n" + teamResults.answer;
+                const deepInterestingConcepts = await this.extractInterestingConcepts(combinedAnswer);
+                newInterestingPoints = [...newInterestingPoints, ...deepInterestingConcepts];
+              }
             } catch (deepDiveError) {
               logger.error(`Error in deep dive research for ${token.symbol}`, deepDiveError);
             }
@@ -1543,6 +1605,11 @@ class AutonomousCryptoOpenAIAgent {
           
           logger.info(`Saved research for ${token.symbol} to memory`);
           
+          // Maybe post a spontaneous tweet about significant findings
+          if (!isAutonomousResearch && (isDeepDive || Math.random() < 0.2)) { // 20% chance or always for deep dives
+            await this.maybeTweetInterestingFinding(`${token.symbol} ${searchResults.answer}`);
+          }
+          
           // For deep dive tokens, immediately initiate analysis
           if (isDeepDive) {
             await this.analyzeSpecificToken(token.symbol);
@@ -1552,9 +1619,161 @@ class AutonomousCryptoOpenAIAgent {
           logger.error(`Error researching token ${token.symbol}`, tokenError);
         }
       }
+      
+      // Autonomous follow-up research if we have interesting points and not at max depth
+      if (newInterestingPoints.length > 0 && maxDepth > 0 && this.settings.enableAutonomousResearch) {
+        logger.info(`Starting autonomous follow-up research at depth ${maxDepth - 1} with ${newInterestingPoints.length} points of interest`);
+        
+        // Remove duplicate concepts and filter down to a reasonable number
+        const uniqueInterestingPoints = [...new Set(newInterestingPoints)].slice(0, 3);
+        
+        // Create follow-up task with interesting concepts as context
+        const followUpTask = {
+          description: `Autonomous follow-up research on: ${uniqueInterestingPoints.join(', ')}`,
+          type: "research"
+        };
+        
+        // Execute recursive research with decremented depth
+        setTimeout(async () => {
+          try {
+            await this.executeResearchTask(followUpTask, maxDepth - 1, true, uniqueInterestingPoints);
+          } catch (followUpError) {
+            logger.error('Error in autonomous follow-up research', followUpError);
+          }
+        }, 5000); // Small delay to avoid overwhelming the system
+      }
+      
+      return newInterestingPoints;
     } catch (error) {
       logger.error('Error executing research task', error);
       throw error;
+    }
+  }
+  
+  /**
+   * Extract interesting concepts from text that could warrant further research
+   * 
+   * @param text - Text to analyze
+   * @returns Array of interesting concepts
+   */
+  private async extractInterestingConcepts(text: string): Promise<string[]> {
+    try {
+      if (!text || text.length < 50) return [];
+      
+      // Use the AI to extract truly interesting concepts worth researching further
+      const prompt = `
+        From this text about crypto/AI tokens, extract 2-3 specific concepts, technologies, or trends 
+        that would be most valuable to research more deeply:
+        
+        ${text.substring(0, 1500)}
+        
+        Return ONLY the research queries as a numbered list with no additional text. 
+        Each query should be specific, detailed, and focused on an interesting crypto/AI angle.
+        Focus on emerging technologies, novel use cases, and unique project aspects.
+        Include token symbols when known and relevant.
+      `;
+      
+      const result = await this.baseAgent.run({ task: prompt });
+      
+      // Parse the result to extract the research queries
+      const queries = result.response
+        .split(/\d+\.\s+/g) // Split by numbered list format
+        .filter(q => q.trim().length > 0) // Remove empty entries
+        .map(q => q.trim()); // Clean up each query
+      
+      return queries;
+    } catch (error) {
+      logger.error('Error extracting interesting concepts', error);
+      return [];
+    }
+  }
+  
+  /**
+   * Post a spontaneous tweet about an interesting finding if it meets criteria
+   * 
+   * @param content - Content to analyze for tweet-worthiness
+   */
+  private async maybeTweetInterestingFinding(content: string): Promise<void> {
+    try {
+      // Check if spontaneous tweets are enabled
+      if (!this.settings.enableSpontaneousTweets) {
+        logger.debug('Spontaneous tweets are disabled');
+        return;
+      }
+      
+      // Don't tweet too frequently - respect minimum intervals
+      const lastTweetTime = this.lastSpontaneousTweetTime || 0;
+      const currentTime = Date.now();
+      const hoursSinceLastTweet = (currentTime - lastTweetTime) / (1000 * 60 * 60);
+      
+      // Check if we've tweeted recently (respect the minimum interval setting)
+      if (hoursSinceLastTweet < this.settings.minSpontaneousTweetIntervalHours) {
+        logger.debug(`Skipping spontaneous tweet - too soon since last tweet (${hoursSinceLastTweet.toFixed(1)} hours, minimum is ${this.settings.minSpontaneousTweetIntervalHours})`);
+        return;
+      }
+      
+      // Ask the AI to evaluate if this content is truly tweet-worthy
+      const evaluationPrompt = `
+        As a crypto analyst specializing in AI tokens, evaluate if this information is TRULY tweet-worthy:
+        
+        ${content.substring(0, 1000)}
+        
+        A tweet-worthy insight should have at least TWO of these attributes:
+        1. Truly novel or breaking information not widely known
+        2. Significant price movement or market opportunity 
+        3. A technical insight or connection others haven't made
+        4. A clear, actionable insight for crypto investors
+        
+        Reply with ONLY "YES" or "NO" based on if this meets the criteria.
+      `;
+      
+      const evaluationResult = await this.baseAgent.run({ task: evaluationPrompt });
+      const isTweetWorthy = evaluationResult.response.trim().toUpperCase().includes('YES');
+      
+      if (!isTweetWorthy) {
+        logger.debug('Content evaluated as not tweet-worthy');
+        return;
+      }
+      
+      // Generate a spontaneous tweet
+      const tweetPrompt = `
+        You just discovered something interesting while researching crypto/AI tokens:
+        
+        ${content.substring(0, 800)}
+        
+        Create an excited, insightful tweet (max 240 chars) that:
+        1. Shares this specific finding or insight
+        2. Uses "Just discovered" or similar phrasing to show freshness
+        3. Contains specific details, not vague statements
+        4. Includes related token symbols with $ prefix if applicable
+        5. Shows your excitement about finding this information
+        6. DOES NOT include hashtags
+        
+        Format your tweet to sound spontaneous, as if you're sharing a real-time insight.
+        Only return the tweet text with no additional commentary.
+      `;
+      
+      const tweetResult = await this.baseAgent.run({ task: tweetPrompt });
+      const tweetContent = tweetResult.response.trim();
+      
+      // Post the tweet immediately
+      logger.info(`Posting spontaneous tweet about interesting finding: ${tweetContent.substring(0, 40)}...`);
+      await this.twitterConnector.tweet(tweetContent);
+      
+      // Update the last tweet time
+      this.lastSpontaneousTweetTime = currentTime;
+      
+      // Also record in content manager
+      this.contentManager.addTweetIdea({
+        topic: `Spontaneous insight`,
+        content: tweetContent,
+        status: 'posted', // Already posted
+        priority: 'high',
+        tags: ['spontaneous', 'insight', 'research']
+      });
+      
+    } catch (error) {
+      logger.error('Error posting spontaneous tweet', error);
     }
   }
   
@@ -2458,6 +2677,80 @@ class AutonomousCryptoOpenAIAgent {
   }
   
   /**
+   * Start autonomous exploration of crypto-AI topics
+   * This method initiates a self-directed research journey
+   */
+  private async startAutonomousExploration(): Promise<void> {
+    // Avoid multiple concurrent autonomous research sessions
+    if (this.autonomousResearchRunning) {
+      logger.info('Autonomous research already running, skipping');
+      return;
+    }
+    
+    this.autonomousResearchRunning = true;
+    logger.info('Starting autonomous exploration of crypto-AI topics');
+    
+    try {
+      // Begin with a few seed topics based on current market interests
+      const seedTopics = [
+        "AI agents on blockchain using crypto tokens",
+        "machine learning data marketplaces in crypto",
+        "generative AI integration with blockchain tokens",
+        "decentralized compute networks for AI training",
+        "federated learning crypto protocols"
+      ];
+      
+      // Randomly select 1-2 initial topics to explore
+      const topicCount = 1 + Math.floor(Math.random() * 2); // 1 or 2 topics
+      const selectedTopics = seedTopics.sort(() => 0.5 - Math.random()).slice(0, topicCount);
+      
+      logger.info(`Starting autonomous exploration with topics: ${selectedTopics.join(', ')}`);
+      
+      // Create a research task with the selected topics
+      const task = {
+        description: `Autonomous exploration of: ${selectedTopics.join(', ')}`,
+        type: "research"
+      };
+      
+      // Execute the research with maximum depth allowed by settings
+      const maxDepth = this.settings.maxAutonomousResearchDepth;
+      await this.executeResearchTask(task, maxDepth);
+      
+      logger.info('Completed autonomous exploration session');
+    } catch (error) {
+      logger.error('Error in autonomous exploration', error);
+    } finally {
+      this.autonomousResearchRunning = false;
+      
+      // Schedule the next random exploration
+      this.scheduleRandomExploration();
+    }
+  }
+  
+  /**
+   * Schedule random autonomous exploration to happen at unpredictable times
+   * This creates more natural behavior for the agent
+   */
+  private scheduleRandomExploration(): void {
+    if (!this.settings.enableAutonomousResearch) return;
+    
+    // Calculate a random delay between 1.5 and 5 hours
+    const minDelayHours = 1.5;
+    const maxDelayHours = 5;
+    const randomDelayHours = minDelayHours + Math.random() * (maxDelayHours - minDelayHours);
+    const delayMs = randomDelayHours * 60 * 60 * 1000;
+    
+    logger.info(`Scheduling next autonomous exploration in ${randomDelayHours.toFixed(1)} hours`);
+    
+    // Schedule the next exploration
+    setTimeout(() => {
+      if (this.isRunning) {
+        this.startAutonomousExploration();
+      }
+    }, delayMs);
+  }
+  
+  /**
    * Get current status of the agent
    */
   getStatus(): any {
@@ -2492,6 +2785,16 @@ class AutonomousCryptoOpenAIAgent {
       agentStatus,
       currentGoals: this.currentGoals,
       currentTasks: this.currentTasks.map(task => task.description),
+      autonomousResearch: {
+        enabled: this.settings.enableAutonomousResearch,
+        running: this.autonomousResearchRunning,
+        maxDepth: this.settings.maxAutonomousResearchDepth
+      },
+      spontaneousTweets: {
+        enabled: this.settings.enableSpontaneousTweets,
+        lastTweetTime: this.lastSpontaneousTweetTime ? new Date(this.lastSpontaneousTweetTime).toISOString() : 'Never',
+        minIntervalHours: this.settings.minSpontaneousTweetIntervalHours
+      },
       scheduledTweets: tweetIdeas.filter(idea => idea.status === 'approved').length,
       postedTweets: tweetIdeas.filter(idea => idea.status === 'posted').length,
       draftTweets: tweetIdeas.filter(idea => idea.status === 'draft').length,
