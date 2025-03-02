@@ -45,6 +45,20 @@ export interface Tweet {
 }
 
 /**
+ * Enhanced interface for interaction events (mentions, replies, etc.)
+ */
+export interface TwitterInteraction {
+  id: string;               // Tweet ID 
+  text: string;             // Tweet content
+  author: string;           // Author display name
+  username: string;         // Author username
+  type: 'mention' | 'reply' | 'keyword'; // Type of interaction
+  originalTweetId?: string; // Original tweet ID (for replies)
+  timestamp: string;        // When the interaction occurred
+  keywords?: string[];      // Matching keywords (for keyword matches)
+}
+
+/**
  * Browser-based Twitter connector to integrate agents with Twitter
  * Uses direct browser automation without relying on Twitter API
  */
@@ -56,7 +70,14 @@ export class BrowserTwitterConnector extends EventEmitter {
   private page: Page | null = null;
   private connected = false;
   private monitorInterval: NodeJS.Timeout | null = null;
+  private monitorTimer: NodeJS.Timeout | null = null;
   private logger: Logger;
+  
+  // Track tweets we've already processed to avoid duplicates
+  private processedTweets: Set<string> = new Set();
+  
+  // Keywords to monitor
+  private monitorKeywords: string[] = [];
 
   /**
    * Creates a new Browser Twitter connector
@@ -71,6 +92,16 @@ export class BrowserTwitterConnector extends EventEmitter {
       headless: config.headless !== false, // Default to true unless explicitly set to false
     };
     this.logger = new Logger('BrowserTwitterConnector');
+    
+    // Initialize monitor keywords from config
+    this.monitorKeywords = config.monitorKeywords || [
+      'ai',
+      'machine learning',
+      'crypto',
+      'agents',
+      'claude',
+      'anthropic'
+    ];
   }
 
   /**
@@ -890,7 +921,7 @@ export class BrowserTwitterConnector extends EventEmitter {
   }
 
   /**
-   * Sets up monitoring for tweets
+   * Sets up enhanced monitoring for tweets, mentions, and replies
    */
   private setupMonitoring(): void {
     if (this.monitorInterval) {
@@ -899,34 +930,429 @@ export class BrowserTwitterConnector extends EventEmitter {
     
     const pollInterval = this.config.pollInterval || 60000;
     this.logger.info('Setting up tweet monitoring', { 
-      keywords: this.config.monitorKeywords,
+      keywords: this.monitorKeywords,
       users: this.config.monitorUsers,
       pollInterval
     });
     
-    this.monitorInterval = setInterval(() => {
-      this.checkForTweets();
-    }, pollInterval);
+    // Add username to monitored keywords if not already present
+    if (this.config.username && !this.monitorKeywords.includes(this.config.username)) {
+      this.monitorKeywords.push(this.config.username);
+    }
+    
+    // Use monitorTimeline for the comprehensive monitoring approach
+    this.monitorTimeline();
   }
   
   /**
-   * Checks for tweets that match monitoring criteria
+   * Comprehensive monitoring of Twitter timeline, mentions, and replies
+   */
+  private monitorTimeline(): void {
+    if (this.monitorTimer) {
+      clearInterval(this.monitorTimer);
+    }
+
+    this.monitorTimer = setInterval(async () => {
+      try {
+        if (!this.isLoggedIn || !this.page) {
+          this.logger.warn('Cannot monitor Twitter - not logged in or browser closed');
+          return;
+        }
+
+        // STEP 1: Check for mentions first
+        await this.checkForMentions();
+        
+        // Short delay between checks
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        // STEP 2: Check for replies to our tweets
+        await this.checkForReplies();
+        
+        // STEP 3: Check general timeline for keywords
+        await this.checkGeneralTimeline();
+        
+      } catch (error) {
+        this.logger.error('Error monitoring Twitter interactions', error);
+      }
+    }, this.config.pollInterval || 60000);
+  }
+  
+  /**
+   * Check for mentions of our account
+   */
+  private async checkForMentions(): Promise<void> {
+    try {
+      this.logger.debug('Checking for mentions...');
+      
+      // Navigate to mentions page
+      await this.page!.goto('https://twitter.com/notifications/mentions', { waitUntil: 'networkidle2' });
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      
+      // Get all mention tweet elements
+      const mentions = await this.page!.$$('article[data-testid="tweet"]');
+      this.logger.debug(`Found ${mentions.length} recent mentions`);
+      
+      // Process each mention
+      for (let i = 0; i < Math.min(mentions.length, 5); i++) { // Process most recent 5 mentions
+        const mention = mentions[i];
+        
+        // Extract tweet ID for checking if we've already processed this
+        const tweetId = await mention.evaluate((el: HTMLElement) => {
+          const articleLinks = Array.from(el.querySelectorAll('a[href*="/status/"]'));
+          for (const link of articleLinks) {
+            const href = link.getAttribute('href') || '';
+            const match = href.match(/\/status\/(\d+)/);
+            if (match) return match[1];
+          }
+          return '';
+        });
+        
+        // Skip if we've already processed this mention
+        if (this.processedTweets.has(tweetId)) {
+          continue;
+        }
+        
+        // Extract tweet text and author
+        const tweetText = await mention.$eval('[data-testid="tweetText"]', (el: Element) => el.textContent || '')
+          .catch(() => '');
+          
+        const authorElement = await mention.$('div[data-testid="User-Name"]');
+        const authorName = authorElement ? await authorElement.evaluate((el: Element) => el.textContent || '') : 'Unknown';
+        
+        // Get the username by extracting the handle from author text
+        const usernameMatch = authorName.match(/@(\w+)/);
+        const username = usernameMatch ? usernameMatch[1] : '';
+        
+        // Make sure it's not our own tweet
+        if (username.toLowerCase() !== this.config.username?.toLowerCase()) {
+          this.logger.info(`Found mention from @${username}: ${tweetText}`);
+          
+          // Add to processed list
+          this.processedTweets.add(tweetId);
+          
+          // Emit mention event with detailed data
+          this.emit('mention', {
+            id: tweetId,
+            text: tweetText,
+            author: authorName,
+            username: username,
+            type: 'mention',
+            timestamp: new Date().toISOString()
+          });
+          
+          // Auto-reply if enabled
+          if (this.config.autoReply && this.agent) {
+            const replyText = await this.generateReply(tweetText, authorName, 'mention');
+            if (replyText && tweetId) {
+              await this.replyToTweet(tweetId, replyText);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      this.logger.error('Error checking mentions', error);
+    }
+  }
+  
+  /**
+   * Check for replies to our tweets
+   */
+  private async checkForReplies(): Promise<void> {
+    try {
+      this.logger.debug('Checking for replies to our tweets...');
+      
+      // Navigate to our profile
+      await this.page!.goto(`https://twitter.com/${this.config.username}`, { waitUntil: 'networkidle2' });
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      
+      // Get our most recent tweets
+      const myTweets = await this.page!.$$('article[data-testid="tweet"]');
+      
+      // For each of our tweets, check replies
+      for (let i = 0; i < Math.min(myTweets.length, 3); i++) { // Only check replies to 3 most recent tweets
+        const tweet = myTweets[i];
+        
+        // Click on the tweet to view thread with replies
+        try {
+          await tweet.click();
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          
+          // Get the tweet ID from URL
+          const url = await this.page!.url();
+          const statusMatch = url.match(/\/status\/(\d+)/);
+          const originalTweetId = statusMatch ? statusMatch[1] : '';
+          
+          if (originalTweetId) {
+            // Get all replies (these will be articles below the main tweet)
+            const replies = await this.page!.$$('article[data-testid="tweet"]:not(:first-child)');
+            
+            for (let j = 0; j < Math.min(replies.length, 5); j++) { // Process up to 5 replies
+              const reply = replies[j];
+              
+              // Extract reply ID
+              const replyId = await reply.evaluate((el: HTMLElement) => {
+                const articleLinks = Array.from(el.querySelectorAll('a[href*="/status/"]'));
+                for (const link of articleLinks) {
+                  const href = link.getAttribute('href') || '';
+                  const match = href.match(/\/status\/(\d+)/);
+                  if (match) return match[1];
+                }
+                return '';
+              });
+              
+              // Skip if already processed
+              if (this.processedTweets.has(replyId)) {
+                continue;
+              }
+              
+              // Extract text and author
+              const replyText = await reply.$eval('[data-testid="tweetText"]', (el: Element) => el.textContent || '')
+                .catch(() => '');
+                
+              const authorElement = await reply.$('div[data-testid="User-Name"]');
+              const authorName = authorElement ? await authorElement.evaluate((el: Element) => el.textContent || '') : 'Unknown';
+              
+              // Extract username
+              const usernameMatch = authorName.match(/@(\w+)/);
+              const username = usernameMatch ? usernameMatch[1] : '';
+              
+              // Skip if it's our own reply
+              if (username.toLowerCase() !== this.config.username?.toLowerCase()) {
+                this.logger.info(`Found reply from @${username} to our tweet ${originalTweetId}: ${replyText}`);
+                
+                // Add to processed list
+                this.processedTweets.add(replyId);
+                
+                // Emit reply event
+                this.emit('reply', {
+                  id: replyId,
+                  text: replyText,
+                  author: authorName,
+                  username: username,
+                  type: 'reply',
+                  originalTweetId: originalTweetId,
+                  timestamp: new Date().toISOString()
+                });
+                
+                // Auto-reply if enabled
+                if (this.config.autoReply && this.agent) {
+                  const responseText = await this.generateReply(replyText, authorName, 'reply', originalTweetId);
+                  if (responseText && replyId) {
+                    await this.replyToTweet(replyId, responseText);
+                  }
+                }
+              }
+            }
+          }
+          
+          // Go back to our profile
+          await this.page!.goto(`https://twitter.com/${this.config.username}`, { waitUntil: 'networkidle2' });
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          
+        } catch (clickError) {
+          this.logger.error('Error clicking tweet to check replies', clickError);
+          // Return to profile and continue with next tweet
+          await this.page!.goto(`https://twitter.com/${this.config.username}`, { waitUntil: 'networkidle2' });
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+      }
+    } catch (error) {
+      this.logger.error('Error checking replies', error);
+    }
+  }
+  
+  /**
+   * Check the general timeline for monitored keywords
+   */
+  private async checkGeneralTimeline(): Promise<void> {
+    try {
+      this.logger.debug('Checking general timeline for keywords...');
+      
+      // Navigate to home timeline
+      await this.page!.goto('https://twitter.com/home', { waitUntil: 'networkidle2' });
+      await new Promise(resolve => setTimeout(resolve, 3000));
+
+      // Get all tweet elements
+      const tweets = await this.page!.$$('article[data-testid="tweet"]');
+      
+      // Process each tweet to check for relevant content
+      for (let i = 0; i < Math.min(tweets.length, 10); i++) { // Only check the first 10 to avoid processing too many
+        const tweet = tweets[i];
+        const tweetText = await tweet.$eval('[data-testid="tweetText"]', (el: Element) => el.textContent || '')
+          .catch(() => ''); // Some tweets might not have text
+        
+        // Check if tweet contains any monitored keywords
+        const hasKeyword = this.monitorKeywords.some(keyword => 
+          tweetText.toLowerCase().includes(keyword.toLowerCase())
+        );
+        
+        if (hasKeyword) {
+          // Extract tweet ID, author and other metadata
+          const tweetId = await tweet.evaluate((el: HTMLElement) => {
+            const articleLinks = Array.from(el.querySelectorAll('a[href*="/status/"]'));
+            for (const link of articleLinks) {
+              const href = link.getAttribute('href') || '';
+              const match = href.match(/\/status\/(\d+)/);
+              if (match) return match[1];
+            }
+            return '';
+          });
+          
+          // Skip if already processed
+          if (this.processedTweets.has(tweetId)) {
+            continue;
+          }
+          
+          const authorName = await tweet.$eval('div[data-testid="User-Name"]', 
+            (el: Element) => el.textContent || '').catch(() => 'Unknown');
+            
+          // Extract username
+          const usernameMatch = authorName.match(/@(\w+)/);
+          const username = usernameMatch ? usernameMatch[1] : '';
+          
+          // Skip if it's our own tweet
+          if (username.toLowerCase() !== this.config.username?.toLowerCase()) {
+            // Log the found tweet
+            this.logger.info(`Found monitored keyword in tweet: ${tweetId} by ${authorName}`);
+            
+            // Add to processed tweets
+            this.processedTweets.add(tweetId);
+            
+            // Emit event with tweet data
+            this.emit('keyword', {
+              id: tweetId,
+              text: tweetText,
+              author: authorName,
+              username: username,
+              type: 'keyword',
+              timestamp: new Date().toISOString(),
+              keywords: this.monitorKeywords.filter(keyword => 
+                tweetText.toLowerCase().includes(keyword.toLowerCase())
+              )
+            });
+            
+            // Optionally, auto-reply if enabled
+            if (this.config.autoReply && this.agent) {
+              // Generate a reply using the agent
+              const replyText = await this.generateReply(tweetText, authorName, 'keyword');
+              
+              // Reply to the tweet
+              if (replyText && tweetId) {
+                await this.replyToTweet(tweetId, replyText);
+              }
+            }
+          }
+        }
+      }
+    } catch (error) {
+      this.logger.error('Error checking general timeline', error);
+    }
+  }
+  
+  /**
+   * Generate a reply to a tweet using the agent
+   * 
+   * @param tweetText - The text of the tweet to reply to
+   * @param authorName - The author of the tweet
+   * @param interactionType - The type of interaction
+   * @param originalTweetId - Optional original tweet ID for context
+   * @returns Promise resolving to the reply text
+   */
+  private async generateReply(
+    tweetText: string, 
+    authorName: string, 
+    interactionType: 'mention' | 'reply' | 'keyword' = 'keyword',
+    originalTweetId?: string
+  ): Promise<string> {
+    try {
+      if (!this.agent && !this.swarm) {
+        this.logger.warn('No agent or swarm available to generate reply');
+        return '';
+      }
+      
+      // Determine context based on interaction type
+      let contextPrefix = '';
+      switch (interactionType) {
+        case 'mention':
+          contextPrefix = `This user has mentioned you in a tweet. `;
+          break;
+        case 'reply':
+          contextPrefix = `This user has replied to your tweet. `;
+          if (originalTweetId) {
+            // Try to get the original tweet content for context
+            try {
+              const originalTweet = await this.getTweet(originalTweetId);
+              contextPrefix += `Your original tweet was: "${originalTweet.text}" `;
+            } catch (e) {
+              // Continue without original tweet context
+            }
+          }
+          break;
+        case 'keyword':
+          contextPrefix = `This tweet contains keywords you're monitoring. `;
+          break;
+      }
+      
+      // Create prompt for the agent
+      const prompt = `
+        ${contextPrefix}
+        
+        Tweet from ${authorName}: "${tweetText}"
+        
+        Please draft a helpful, engaging, and professional reply. 
+        Keep your response under 240 characters as this is for Twitter.
+        Be friendly but stay on-brand with your personality.
+        Do not include hashtags in your reply.
+        
+        Only return the text of your reply, with no additional commentary.
+      `;
+      
+      // Use the appropriate agent to generate the reply
+      if (this.agent) {
+        const response = await this.agent.run({ task: prompt });
+        return response.response.trim();
+      } else if (this.swarm) {
+        // For swarm, just use the swarm itself
+        const response = await this.swarm.run({ task: prompt });
+        return response.response.trim();
+      }
+      
+      return '';
+    } catch (error) {
+      this.logger.error('Error generating reply', error);
+      return '';
+    }
+  }
+  
+  /**
+   * Reply to a tweet (wrapper around postReplyWithBrowser)
+   * 
+   * @param tweetId - The ID of the tweet to reply to
+   * @param replyText - The text of the reply
+   */
+  private async replyToTweet(tweetId: string, replyText: string): Promise<void> {
+    try {
+      await this.postReplyWithBrowser(replyText, tweetId);
+      this.logger.info(`Posted reply to tweet ${tweetId}`);
+    } catch (error) {
+      this.logger.error(`Error posting reply to tweet ${tweetId}`, error);
+    }
+  }
+  
+  /**
+   * Gets login status based on current browser state
+   */
+  private get isLoggedIn(): boolean {
+    return this.connected && this.browser !== null && this.page !== null;
+  }
+  
+  /**
+   * Checks for tweets that match monitoring criteria (legacy method kept for compatibility)
    */
   private async checkForTweets(): Promise<void> {
-    try {
-      // This would be implemented with browser automation,
-      // but for the basic implementation, we'll just log that it's not fully implemented
-      this.logger.debug('Tweet monitoring is limited in browser-only implementation');
-      
-      // For a complete implementation, you would:
-      // 1. Navigate to Twitter search pages for your monitored keywords
-      // 2. Extract tweet data from the DOM
-      // 3. Navigate to user profiles for monitored users
-      // 4. Extract their latest tweets
-      // 5. Process and emit events for matching tweets
-    } catch (error) {
-      this.logger.error('Error checking for tweets', error);
-    }
+    // This method is essentially replaced by monitorTimeline
+    this.logger.debug('checkForTweets is deprecated, using enhanced monitoring instead');
+    await this.checkGeneralTimeline();
   }
   
   /**

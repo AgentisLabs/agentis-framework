@@ -534,7 +534,7 @@ class AutonomousCryptoOpenAIAgent {
     ];
     
     // Create Twitter connector using browser automation
-    return new BrowserTwitterConnector({
+    const connector = new BrowserTwitterConnector({
       username: process.env.TWITTER_USERNAME,
       password: process.env.TWITTER_PASSWORD,
       email: process.env.TWITTER_EMAIL,
@@ -548,6 +548,270 @@ class AutonomousCryptoOpenAIAgent {
       headless: false, // Set to false to see the browser window
       debug: true // Enable debugging
     });
+    
+    // Set up event handlers for different interaction types
+    
+    // Handle mentions
+    connector.on('mention', async (interaction) => {
+      logger.info(`Processing mention from @${interaction.username}: "${interaction.text.substring(0, 50)}..."`);
+      
+      try {
+        // Save to vector memory
+        await this.saveInteractionToMemory(interaction);
+        
+        // Process using agent if auto-reply is disabled (if enabled, reply is handled by connector)
+        if (!(process.env.AUTO_REPLY === 'true')) {
+          await this.processTwitterInteraction(interaction);
+        }
+      } catch (error) {
+        logger.error(`Error processing mention from @${interaction.username}`, error);
+      }
+    });
+    
+    // Handle replies
+    connector.on('reply', async (interaction) => {
+      logger.info(`Processing reply from @${interaction.username}: "${interaction.text.substring(0, 50)}..."`);
+      
+      try {
+        // Save to vector memory
+        await this.saveInteractionToMemory(interaction);
+        
+        // Process using agent if auto-reply is disabled (if enabled, reply is handled by connector)
+        if (!(process.env.AUTO_REPLY === 'true')) {
+          await this.processTwitterInteraction(interaction);
+        }
+      } catch (error) {
+        logger.error(`Error processing reply from @${interaction.username}`, error);
+      }
+    });
+    
+    // Handle keyword matches
+    connector.on('keyword', async (interaction) => {
+      logger.info(`Processing keyword match from @${interaction.username}: "${interaction.text.substring(0, 50)}..."`);
+      
+      try {
+        // Save to vector memory
+        await this.saveInteractionToMemory(interaction);
+        
+        // For keyword matches, we don't auto-process unless it's especially relevant
+        // This prevents the agent from responding to every tweet with keywords
+        const relevanceScore = this.calculateRelevance(interaction);
+        if (relevanceScore > 0.7 && !(process.env.AUTO_REPLY === 'true')) {
+          await this.processTwitterInteraction(interaction);
+        }
+      } catch (error) {
+        logger.error(`Error processing keyword match from @${interaction.username}`, error);
+      }
+    });
+    
+    return connector;
+  }
+  
+  /**
+   * Save a Twitter interaction to vector memory
+   * 
+   * @param interaction - The Twitter interaction to save
+   */
+  private async saveInteractionToMemory(interaction: any): Promise<void> {
+    try {
+      // Create a structured note for the interaction
+      // Include metadata in the content to fit within the Note interface
+      const metadataStr = JSON.stringify({
+        tweetId: interaction.id,
+        username: interaction.username,
+        interactionType: interaction.type,
+        originalTweetId: interaction.originalTweetId,
+        keywords: interaction.keywords
+      });
+      
+      const interactionNote = {
+        title: `Twitter ${interaction.type} from @${interaction.username}`,
+        content: `${interaction.text}\n\n---\nMETADATA: ${metadataStr}`,
+        category: 'twitter_interaction',
+        tags: ["twitter", interaction.type, interaction.username, `tweet_${interaction.id}`],
+        timestamp: Date.now()
+      };
+      
+      // Store in vector memory
+      const noteId = await this.memory.addNote(interactionNote);
+      logger.info(`Saved Twitter interaction to memory (ID: ${noteId})`);
+    } catch (error) {
+      logger.error('Error saving Twitter interaction to memory', error);
+    }
+  }
+  
+  /**
+   * Process a Twitter interaction using the agent
+   * 
+   * @param interaction - The Twitter interaction to process
+   */
+  private async processTwitterInteraction(interaction: any): Promise<void> {
+    try {
+      // Prepare context based on interaction type
+      let promptContext = '';
+      
+      switch (interaction.type) {
+        case 'mention':
+          promptContext = `Someone mentioned you on Twitter.`;
+          break;
+        case 'reply':
+          promptContext = `Someone replied to your tweet on Twitter.`;
+          if (interaction.originalTweetId) {
+            // Try to find the original tweet in our memory
+            const originalTweets = await this.memory.searchNotes({
+              query: interaction.originalTweetId,
+              limit: 1
+            });
+            
+            if (originalTweets.length > 0) {
+              promptContext += ` Your original tweet was: "${originalTweets[0].content}"`;
+            }
+          }
+          break;
+        case 'keyword':
+          promptContext = `Someone tweeted about keywords you're monitoring.`;
+          if (interaction.keywords && interaction.keywords.length > 0) {
+            promptContext += ` Matching keywords: ${interaction.keywords.join(', ')}`;
+          }
+          break;
+      }
+      
+      // Create prompt for the agent
+      const prompt = `
+        ${promptContext}
+        
+        Tweet from @${interaction.username}: "${interaction.text}"
+        
+        As a crypto analyst focused on AI tokens, create an engaging reply that positions you as an expert.
+        Your response MUST be under 240 characters as it's for Twitter.
+        
+        IMPORTANT: Do NOT analyze whether you should reply or not - you MUST reply with actual substantive content.
+        NEVER say that you're not going to respond or explain why something isn't worth responding to.
+        
+        Your reply should:
+        1. Be directly relevant to the topic if possible (AI, crypto, market analysis)
+        2. Add value with insight, analysis, or a thoughtful question
+        3. Maintain your professional, analytical persona
+        4. Engage positively with the user
+        
+        Return your tweet in this format:
+        RESPONSE: [your tweet text here]
+      `;
+      
+      // Process with the agent
+      const result = await this.autonomousAgent.runOperation<{ response: string }>(prompt);
+      
+      // Extract response
+      let replyText = "";
+      
+      // Try to extract the formatted response first
+      if (result.response.includes('RESPONSE:')) {
+        const tweetMatch = result.response.match(/RESPONSE:\s*(.*?)(\s*$|(?=\n))/s);
+        if (tweetMatch && tweetMatch[1]) {
+          replyText = tweetMatch[1].trim();
+        }
+      } 
+      
+      // If we couldn't extract a formatted response, or if it's empty, use the entire response
+      if (!replyText) {
+        replyText = result.response.trim();
+      }
+      
+      // Check if the response appears to be a refusal or meta-commentary
+      const refusalIndicators = [
+        "not pertaining", "not relevant", "doesn't warrant", "doesn't require",
+        "not appropriate", "not engaging", "no analysis needed", "doesn't ask",
+        "not directly related", "not worth", "no response", "not responding",
+        "don't need to respond", "this tweet doesn't", "doesn't pertain",
+        "not my area", "outside my expertise"
+      ];
+      
+      const containsRefusal = refusalIndicators.some(indicator => 
+        replyText.toLowerCase().includes(indicator.toLowerCase())
+      );
+      
+      if (containsRefusal) {
+        // Generate a generic, but personalized response instead
+        logger.info(`Generated response contained refusal language, replacing with generic response`);
+        
+        const genericResponses = [
+          `Interesting point about the crypto market. I'm tracking several AI-focused tokens with similar patterns. What's your take on the recent price movement?`,
+          `Thanks for the mention! The AI/crypto intersection is evolving rapidly. Have you seen any other projects implementing similar technology?`,
+          `Appreciate the perspective. In my analysis, AI tokens with strong fundamentals continue to outperform. Are you following any specific projects?`,
+          `This aligns with trends I've been analyzing. The technical indicators for AI tokens suggest we're entering a new phase of adoption.`,
+          `Important observations here. My research shows intersection of AI and DeFi has significant growth potential in coming months.`
+        ];
+        
+        replyText = genericResponses[Math.floor(Math.random() * genericResponses.length)];
+      }
+      
+      // Enforce character limit for Twitter
+      if (replyText.length > 240) {
+        replyText = replyText.substring(0, 237) + "...";
+      }
+      
+      // Post the reply
+      logger.info(`Posting reply to @${interaction.username}: "${replyText}"`);
+      await this.twitterConnector.tweet(replyText, interaction.id);
+      
+      // Also save this interaction+response to memory
+      // Include metadata in content to fit within Note interface
+      const metadataStr = JSON.stringify({
+        inReplyToId: interaction.id,
+        inReplyToUser: interaction.username,
+        interactionType: interaction.type
+      });
+      
+      await this.memory.addNote({
+        title: `Twitter response to @${interaction.username}`,
+        content: `${replyText}\n\n---\nMETADATA: ${metadataStr}`,
+        category: 'twitter_response',
+        tags: ["twitter", "response", interaction.username, `reply_to_${interaction.id}`],
+        timestamp: Date.now()
+      });
+    } catch (error) {
+      logger.error(`Error processing Twitter interaction from @${interaction.username}`, error);
+    }
+  }
+  
+  /**
+   * Calculate relevance score for a keyword interaction
+   * This helps determine if we should respond to general keyword matches
+   * 
+   * @param interaction - The Twitter interaction
+   * @returns Relevance score between 0-1
+   */
+  private calculateRelevance(interaction: any): number {
+    try {
+      // Simple implementation - count our priority keywords
+      const priorityKeywords = [
+        process.env.TWITTER_USERNAME || '',
+        'ask',
+        'question',
+        'advice',
+        'recommend',
+        'opinion',
+        'what do you think',
+        'agree',
+        'disagree'
+      ];
+      
+      // Count matches
+      const text = interaction.text.toLowerCase();
+      let matches = 0;
+      
+      for (const keyword of priorityKeywords) {
+        if (keyword && text.includes(keyword.toLowerCase())) {
+          matches++;
+        }
+      }
+      
+      // Calculate score
+      return Math.min(1.0, matches / 3); // 3+ matches = 1.0 score
+    } catch (error) {
+      logger.error('Error calculating relevance', error);
+      return 0;
+    }
   }
   
   /**
