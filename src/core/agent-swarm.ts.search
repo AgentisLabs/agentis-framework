@@ -1,0 +1,15 @@
+  getAgent(idOrName: string): Agent | undefined {
+    // First try to get by ID
+    if (this.agents.has(idOrName)) {
+      return this.agents.get(idOrName);
+    }
+    
+    // Otherwise search by name
+    for (const agent of this.agents.values()) {
+      if (agent.config.name === idOrName) {
+        return agent;
+      }
+    }
+    
+    return undefined;
+  }

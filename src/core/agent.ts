@@ -101,8 +101,17 @@ export class Agent extends EventEmitter {
       id: uuidv4(),
       messages: [],
       created: Date.now(),
-      updated: Date.now()
+      updated: Date.now(),
+      metadata: {}
     };
+    
+    // Store context in conversation metadata if provided
+    if (options.context) {
+      conversation.metadata = {
+        ...conversation.metadata,
+        context: options.context
+      };
+    }
 
     // Add system prompt if conversation is new
     if (conversation.messages.length === 0) {

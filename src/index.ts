@@ -75,6 +75,11 @@ export {
   TwitterConnector,
   TwitterConnectorConfig
 } from './platform-connectors/twitter-connector';
+export {
+  TwitterDirectConnector,
+  TwitterDirectConnectorConfig,
+  Tweet
+} from './platform-connectors/twitter-direct-connector';
 
 // Config
 export { ConfigManager } from './config/config-manager';

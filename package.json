@@ -24,7 +24,11 @@
     "integrated-demo": "ts-node -r tsconfig-paths/register examples/integrated-showcase.ts",
     "feedback-demo": "ts-node -r tsconfig-paths/register examples/feedback-demo.ts",
     "stock-research": "ts-node -r tsconfig-paths/register examples/stock-research-team.ts",
-    "crypto-agent": "ts-node -r tsconfig-paths/register examples/autonomous-crypto-openai-agent-fixed.ts"
+    "crypto-agent": "ts-node -r tsconfig-paths/register examples/autonomous-crypto-openai-agent-fixed.ts",
+    "crypto-twitter": "ts-node -r tsconfig-paths/register examples/crypto-twitter-direct-agent.ts",
+    "twitter": "ts-node -r tsconfig-paths/register examples/twitter-direct-bot.ts",
+    "twitter-bot": "ts-node -r tsconfig-paths/register examples/twitter-direct-bot.ts",
+    "twitter-trends": "ts-node -r tsconfig-paths/register -e \"require('./examples/twitter-direct-bot').getTrends()\""
   },
   "keywords": [
     "ai",

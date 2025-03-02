@@ -78,6 +78,7 @@ export interface RunOptions {
   temperature?: number;
   stream?: boolean;
   onStream?: (text: string, done: boolean) => void;
+  context?: Record<string, any>; // Additional context for the agent
 }
 
 /**

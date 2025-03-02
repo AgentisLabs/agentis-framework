@@ -82,8 +82,8 @@ export class InMemoryVectorStore implements VectorStoreInterface {
    */
   constructor(config: VectorStoreConfig) {
     this.config = {
-      dimensions: 1536, // Default to OpenAI embedding dimensions
-      ...config
+      ...config,  // Put dimensions from config first
+      dimensions: config.dimensions || 1536, // Default to OpenAI embedding dimensions if not specified
     };
   }
   

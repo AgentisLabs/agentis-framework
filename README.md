@@ -132,7 +132,7 @@ discord.connect(swarm);
 import { 
   Agent, 
   AgentRole, 
-  TwitterConnector 
+  TwitterDirectConnector 
 } from 'agentis';
 
 // Create the agent
@@ -147,36 +147,76 @@ const agent = new Agent({
 });
 
 // Configure the Twitter connector - no API keys required!
-const twitter = new TwitterConnector({
+const twitter = new TwitterDirectConnector({
   username: process.env.TWITTER_USERNAME,
   password: process.env.TWITTER_PASSWORD,
   email: process.env.TWITTER_EMAIL,
   
-  // Monitor specific keywords and users
+  // Optional Twitter API credentials for enhanced features
+  apiKey: process.env.TWITTER_API_KEY,
+  apiSecret: process.env.TWITTER_API_SECRET_KEY,
+  accessToken: process.env.TWITTER_ACCESS_TOKEN,
+  accessSecret: process.env.TWITTER_ACCESS_TOKEN_SECRET,
+  
+  // Monitoring options
   monitorKeywords: ['ai', 'anthropic', 'claude'],
   monitorUsers: ['AnthropicAI'],
+  monitorMentions: true,
+  monitorReplies: true,
+  
+  // Session persistence
+  persistCookies: true,
   
   // Auto-reply to tweets
   autoReply: true
 });
 
-// Handle tweet events
+// Event handlers for different tweet types
 twitter.on('tweet', async (tweet) => {
   console.log(`Received tweet from @${tweet.author.username}: ${tweet.text}`);
-  
-  // Like the tweet
   await twitter.like(tweet.id);
+});
+
+twitter.on('mention', async (tweet) => {
+  console.log(`Mentioned in tweet from @${tweet.author.username}`);
+  const response = await agent.run({
+    task: `Craft a helpful reply to this mention from @${tweet.author.username}: "${tweet.text}"`,
+    context: { tweet }
+  });
+  await twitter.tweet(response.response, { replyTo: tweet.id });
+});
+
+twitter.on('keyword_match', async (tweet) => {
+  console.log(`Keyword match in tweet from @${tweet.author.username}`);
+  // Handle tweets matching monitored keywords
 });
 
 // Connect the agent to Twitter
 await twitter.connect(agent);
 
-// Post a tweet
-await twitter.tweet('Hello Twitter! I\'m an AI assistant powered by Agentis framework.');
+// Get current Twitter trends
+const trends = await twitter.getTrends();
+console.log('Current Twitter trends:', trends.slice(0, 5));
 
-// Ask Twitter's Grok AI a question
-const grokResponse = await twitter.askGrok('What are the latest AI developments?');
-console.log(`Grok says: ${grokResponse}`);
+// Post a tweet (with a poll if API keys are provided)
+const tweetId = await twitter.tweet('Hello Twitter! I\'m an AI assistant powered by Agentis framework.', {
+  poll: {
+    options: [
+      { label: 'AI & Technology 🤖' },
+      { label: 'Finance & Crypto 💰' },
+      { label: 'General Questions ❓' },
+      { label: 'Other Topics 🌈' }
+    ],
+    durationMinutes: 1440 // 24 hours
+  }
+});
+
+// Use Twitter's Grok AI through our connector
+const grokResponse = await twitter.grokChat([{
+  role: 'user',
+  content: 'What are the latest AI developments?'
+}]);
+console.log(`Grok says: ${grokResponse.message}`);
 ```
 
 ### Multi-Provider Agent Swarms

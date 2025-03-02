@@ -1309,8 +1309,18 @@ export class TwitterConnector extends EventEmitter {
       // Check monitored users
       if (this.config.monitorUsers?.length) {
         for (const username of this.config.monitorUsers) {
-          // Get latest tweet
-          const latestTweet = await this.scraper.getLatestTweet(username);
+          // Get latest tweet (wrapped in try/catch as a backup)
+          let latestTweet;
+          try {
+            latestTweet = await (this.scraper as any).getLatestTweet(username);
+          } catch (error) {
+            // Fallback to getting tweets and taking the first one
+            const tweets = await this.scraper.getTweets(username, 1);
+            for await (const tweet of tweets) {
+              latestTweet = tweet;
+              break;
+            }
+          }
           
           if (!latestTweet) {
             continue;
