@@ -2419,6 +2419,9 @@ Model your tweet after these examples - direct, professional, and focused on the
       
       // Filter tweets related to crypto and blockchain
       const cryptoRelatedTweets = timelineTweets.filter(tweet => {
+        // Skip tweets without text content
+        if (!tweet || !tweet.text) return false;
+        
         const text = tweet.text.toLowerCase();
         const isRelevant = this.settings.focusAreas.some(area => 
           text.includes(area.toLowerCase())
@@ -2466,11 +2469,17 @@ Model your tweet after these examples - direct, professional, and focused on the
         if (interactedTweetIds.has(tweet.id)) continue;
         
         try {
+          // Skip tweets with no text
+          if (!tweet.text) {
+            logger.debug(`Skipping tweet without text content from @${tweet.author.username || 'unknown'}`);
+            continue;
+          }
+          
           // Analyze the tweet content with our agent
           const analysis = await this.baseAgent.run({
             task: `Analyze this tweet:
             
-Tweet from @${tweet.author.username}: "${tweet.text}"
+Tweet from @${tweet.author.username || 'unknown'}: "${tweet.text}"
 
 Key points to consider:
 1. Is this valuable content about crypto/blockchain?
@@ -2694,11 +2703,17 @@ Your analysis should be based on the tweet's quality, accuracy, and relevance to
             if (!tweet.id || interactedTweetIds.has(tweet.id)) continue;
             
             try {
+              // Skip tweets with no text
+              if (!tweet.text) {
+                logger.debug(`Skipping tweet without text content from @${tweet.author.username || 'unknown'}`);
+                continue;
+              }
+              
               // Analyze the tweet
               const analysis = await this.baseAgent.run({
                 task: `Analyze this tweet about ${topic}:
                 
-Tweet from @${tweet.author.username}: "${tweet.text}"
+Tweet from @${tweet.author.username || 'unknown'}: "${tweet.text}"
 
 Key points to consider:
 1. Is this high-quality content about ${topic}?
@@ -2805,6 +2820,9 @@ Your analysis should be based on the tweet's quality, accuracy, and relevance to
       
       // Filter tweets related to crypto and blockchain
       const cryptoRelatedTweets = timelineTweets.filter(tweet => {
+        // Skip tweets without text content
+        if (!tweet || !tweet.text) return false;
+        
         const text = tweet.text.toLowerCase();
         const isRelevant = this.settings.focusAreas.some(area => 
           text.includes(area.toLowerCase())
@@ -2846,12 +2864,18 @@ Your analysis should be based on the tweet's quality, accuracy, and relevance to
         if (tweet.author.username?.toLowerCase() === myUsername?.toLowerCase()) continue;
         
         try {
+          // Skip tweets with no text
+          if (!tweet.text) {
+            logger.debug(`Skipping tweet without text content from @${tweet.author.username || 'unknown'}`);
+            continue;
+          }
+          
           // For follow-up tasks, we'll mostly just like relevant content
           // Check if content is worth liking
           const analysis = await this.baseAgent.run({
             task: `Analyze this tweet:
             
-Tweet from @${tweet.author.username}: "${tweet.text}"
+Tweet from @${tweet.author.username || 'unknown'}: "${tweet.text}"
 
 Is this tweet worth liking based on relevance to crypto markets and quality of information?
 Answer with either "LIKE" or "IGNORE".`
@@ -2954,11 +2978,17 @@ Answer with either "LIKE" or "IGNORE".`
         if (!tweet.id) continue;
         
         try {
+          // Skip tweets without text
+          if (!tweet.text) {
+            logger.debug(`Skipping tweet without text content from @${tweet.author.username || 'unknown'}`);
+            continue;
+          }
+          
           // More detailed analysis for trending topics
           const analysis = await this.baseAgent.run({
             task: `Analyze this tweet about ${searchTerm}:
             
-Tweet from @${tweet.author.username}: "${tweet.text}"
+Tweet from @${tweet.author.username || 'unknown'}: "${tweet.text}"
 
 How should we engage with this content?
 Choose ONE option: "LIKE", "RETWEET", or "IGNORE".`
