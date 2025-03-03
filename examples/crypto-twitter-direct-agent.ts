@@ -1026,31 +1026,45 @@ The tweet should:
     try {
       logger.info('Creating execution plan...');
       
-      // Simplified approach with predefined tasks - removed follow_up task
+      // Create a more diverse plan with broader topic coverage
       const plan = {
         id: `plan_${Date.now()}`,
-        originalTask: "Research AI-related crypto tokens and share insights via Twitter",
+        originalTask: "Research crypto and blockchain technologies and share insights via Twitter",
         tasks: [
           {
             id: `task_${Date.now()}_1`,
-            description: "Research trending AI-related tokens",
+            description: "Research trending crypto tokens and blockchain technologies",
             dependencies: [],
             status: "pending", 
             type: "research"
           },
           {
             id: `task_${Date.now()}_2`,
-            description: "Analyze the most promising tokens",
+            description: "Analyze the most promising tokens and industry trends",
             dependencies: [`task_${Date.now()}_1`],
             status: "pending",
             type: "analyze"
           },
           {
             id: `task_${Date.now()}_3`,
-            description: "Generate and post tweets with insights",
+            description: "Generate and post tweets with token insights",
             dependencies: [`task_${Date.now()}_2`],
             status: "pending",
             type: "tweet"
+          },
+          {
+            id: `task_${Date.now()}_4`,
+            description: "Share broader thoughts on blockchain technology trends",
+            dependencies: [`task_${Date.now()}_2`],
+            status: "pending",
+            type: "industry_tweet"
+          },
+          {
+            id: `task_${Date.now()}_5`,
+            description: "Monitor and engage with community by following up on previous tweets",
+            dependencies: [],
+            status: "pending",
+            type: "follow_up" 
           }
         ],
         created: Date.now(),
@@ -1119,6 +1133,14 @@ The tweet should:
         await this.executeTweetTask(task);
         break;
         
+      case 'industry_tweet':
+        await this.executeIndustryTweetTask(task);
+        break;
+        
+      case 'follow_up':
+        await this.executeFollowUpTask(task);
+        break;
+        
       default:
         // For unspecified tasks, use the agent to interpret and execute
         await this.executeGenericTask(task);
@@ -1138,9 +1160,11 @@ The tweet should:
       return 'research';
     } else if (lowerDesc.includes('analyze') || lowerDesc.includes('analysis')) {
       return 'analyze';
+    } else if (lowerDesc.includes('industry') || lowerDesc.includes('trends') || lowerDesc.includes('thoughts') || lowerDesc.includes('broader')) {
+      return 'industry_tweet';
     } else if (lowerDesc.includes('tweet') || lowerDesc.includes('post')) {
       return 'tweet';
-    } else if (lowerDesc.includes('follow up') || lowerDesc.includes('track') || lowerDesc.includes('monitor')) {
+    } else if (lowerDesc.includes('follow up') || lowerDesc.includes('track') || lowerDesc.includes('monitor') || lowerDesc.includes('engage')) {
       return 'follow_up';
     }
     
@@ -1597,39 +1621,114 @@ The tweet should:
       }
       
       try {
-        const recentTweets = await this.twitterConnector.getUserTweets(myUsername, 10);
+        // Get recent tweets and mentions
+        const recentTweets = await this.twitterConnector.getUserTweets(myUsername, 15);
+        logger.info(`Found ${recentTweets.length} recent tweets to check for follow-ups`);
         
-        // Find tweets with predictions
+        // Look for tweets with engagement (replies/likes)
+        const tweetsWithEngagement = recentTweets.filter(tweet => 
+          (tweet.metrics?.replies && tweet.metrics.replies > 0) || 
+          (tweet.metrics?.likes && tweet.metrics.likes > 5)
+        );
+        
+        // Find tweets with predictions or specific claims
         const predictionTweets = recentTweets.filter(tweet => 
           typeof tweet.text === 'string' && (
             tweet.text.includes('predict') || 
             tweet.text.includes('expect') ||
             tweet.text.includes('likely') ||
             tweet.text.includes('anticipate') ||
-            tweet.text.includes('potential')
+            tweet.text.includes('potential') ||
+            tweet.text.includes('should') ||
+            tweet.text.includes('will')
           )
         );
         
-        // For each prediction tweet, check if it's time for a follow-up
+        logger.info(`Found ${predictionTweets.length} tweets with predictions and ${tweetsWithEngagement.length} tweets with engagement`);
+        
+        // Process prediction tweets for follow-ups
         for (const tweet of predictionTweets) {
           // Skip if content is not a string (defensive programming)
           if (typeof tweet.text !== 'string') continue;
-          
-          // Extract token symbol if present
-          const tokenSymbols = this.extractTokenSymbols(tweet.text);
-          if (tokenSymbols.length === 0) continue;
-          
-          const symbol = tokenSymbols[0];
           
           // Check if posted at least 24 hours ago
           const tweetTime = tweet.createdAt ? tweet.createdAt.getTime() : Date.now() - 86400000;
           const currentTime = Date.now();
           const hoursSinceTweet = (currentTime - tweetTime) / (1000 * 60 * 60);
           
-          if (hoursSinceTweet >= 24) {
+          // Extract token symbol if present
+          const tokenSymbols = this.extractTokenSymbols(tweet.text);
+          
+          if (tokenSymbols.length > 0 && hoursSinceTweet >= 24) {
+            const symbol = tokenSymbols[0];
             await this.generateFollowUpTweet(symbol, tweet.text);
+          } else if (hoursSinceTweet >= 36) {
+            // For non-token tweets, still consider follow-ups after 36 hours
+            await this.generateGenericFollowUpTweet(tweet.text);
           }
         }
+        
+        // Process tweets with engagement for replies
+        for (const tweet of tweetsWithEngagement) {
+          if (!tweet.id) continue;
+          
+          try {
+            // Check for replies to our tweet
+            logger.info(`Checking for replies to tweet with ID: ${tweet.id}`);
+            const replies = await this.twitterConnector.searchTweets(`to:${myUsername}`, 5);
+            
+            // Filter replies that are actually to this specific tweet
+            const directReplies = replies.filter(reply => 
+              reply.inReplyToId === tweet.id && !reply.author.username?.includes(myUsername)
+            );
+            
+            logger.info(`Found ${directReplies.length} replies to engage with`);
+            
+            // Engage with replies that haven't been responded to
+            for (const reply of directReplies) {
+              if (!reply.id) continue;
+              
+              // Check if we've already responded to this reply
+              const myReplies = await this.twitterConnector.searchTweets(`from:${myUsername} to:${reply.author.username}`, 3);
+              const alreadyReplied = myReplies.some(myReply => myReply.inReplyToId === reply.id);
+              
+              if (!alreadyReplied) {
+                await this.handleReply(reply);
+              }
+            }
+          } catch (error) {
+            logger.error(`Error checking replies for tweet ${tweet.id}`, error);
+          }
+        }
+        
+        // Like and respond to mentions
+        try {
+          const mentions = await this.twitterConnector.searchTweets(`@${myUsername}`, 5);
+          logger.info(`Found ${mentions.length} mentions to possibly engage with`);
+          
+          for (const mention of mentions) {
+            if (!mention.id) continue;
+            
+            // Like mentions
+            try {
+              await this.twitterConnector.like(mention.id);
+              logger.info(`Liked mention from @${mention.author.username}`);
+            } catch (likeError) {
+              logger.debug(`Error liking mention`, likeError);
+            }
+            
+            // Check if we've already responded to this mention
+            const myReplies = await this.twitterConnector.searchTweets(`from:${myUsername} to:${mention.author.username}`, 3);
+            const alreadyReplied = myReplies.some(myReply => myReply.inReplyToId === mention.id);
+            
+            if (!alreadyReplied) {
+              await this.handleMention(mention);
+            }
+          }
+        } catch (mentionsError) {
+          logger.error('Error processing mentions', mentionsError);
+        }
+        
       } catch (error) {
         logger.error('Error retrieving tweets for follow-up', error);
       }
@@ -1675,6 +1774,7 @@ The tweet should:
         2. Compares it to current performance
         3. Offers updated insight
         4. Uses $${symbol} format
+        5. Maintains a professional but approachable tone
         
         Only return the tweet text.
       `;
@@ -1695,6 +1795,96 @@ The tweet should:
   }
   
   /**
+   * Generate a follow-up tweet for non-token specific content
+   * 
+   * @param originalTweet - Original tweet content
+   */
+  private async generateGenericFollowUpTweet(originalTweet: string): Promise<void> {
+    logger.info(`Generating generic follow-up tweet for broader crypto/tech topics`);
+    
+    try {
+      // Get the current date for context
+      const currentDate = new Date().toISOString().split('T')[0];
+      
+      // Generate follow-up tweet
+      const followUpPrompt = `
+        You previously tweeted this insight about crypto/blockchain technology:
+        "${originalTweet}"
+        
+        Today's date: ${currentDate}
+        
+        Create a follow-up tweet (under 240 chars) that:
+        1. Expands on your previous thought about blockchain/crypto trends
+        2. Offers a new insight or observation about the industry
+        3. Shows your expertise in broader technology trends
+        4. Does NOT need to focus on specific tokens
+        5. Maintains a professional but approachable tone
+        
+        Only return the tweet text.
+      `;
+      
+      // Generate tweet
+      const tweetResult = await this.baseAgent.run({ task: followUpPrompt });
+      
+      // Post the tweet
+      try {
+        const tweetId = await this.twitterConnector.tweet(tweetResult.response);
+        logger.info(`Posted follow-up tweet about industry trends`, { tweetId });
+      } catch (error) {
+        logger.error(`Error posting generic follow-up tweet`, error);
+      }
+    } catch (error) {
+      logger.error(`Error generating generic follow-up tweet`, error);
+    }
+  }
+  
+  /**
+   * Execute an industry tweet task that shares broader thoughts
+   * 
+   * @param task - Industry tweet task
+   */
+  private async executeIndustryTweetTask(task: any): Promise<void> {
+    logger.info(`Executing industry trend tweet task: ${task.description}`);
+    
+    try {
+      // Get current date for context
+      const currentDate = new Date().toISOString().split('T')[0];
+      
+      // Generate a tweet about broader crypto/blockchain trends
+      const tweetPrompt = `
+        Create an insightful tweet about current trends in blockchain technology and crypto markets.
+        
+        Today's date: ${currentDate}
+        
+        The tweet should:
+        1. Discuss a significant trend, development, or observation in the crypto/blockchain industry
+        2. Offer a unique perspective or insight that demonstrates your expertise
+        3. Be forward-looking and thoughtful
+        4. Be concise (under 240 chars)
+        5. NOT focus exclusively on specific tokens
+        6. Maintain a professional but approachable tone
+        7. NOT include hashtags
+        
+        Only return the tweet text.
+      `;
+      
+      // Generate tweet
+      const tweetResult = await this.baseAgent.run({ task: tweetPrompt });
+      
+      // Post the tweet
+      try {
+        const tweetId = await this.twitterConnector.tweet(tweetResult.response);
+        logger.info(`Posted industry trend tweet`, { tweetId });
+      } catch (error) {
+        logger.error(`Error posting industry trend tweet`, error);
+      }
+    } catch (error) {
+      logger.error(`Error executing industry tweet task: ${task.description}`, error);
+      throw error;
+    }
+  }
+  
+  /**
    * Execute a generic task
    * 
    * @param task - Generic task
@@ -1708,10 +1898,11 @@ The tweet should:
         Execute this task: ${task.description}
         
         Current context:
-        - You are an autonomous crypto analysis agent focused on AI-related tokens
-        - You have access to trending token data
+        - You are an autonomous crypto analysis agent with expertise in blockchain technologies
+        - You analyze trending tokens and market patterns
         - You can store analyses in memory
-        - You can post tweets
+        - You can post tweets about tokens and industry trends
+        - You can engage with users and respond to mentions
         
         Provide a detailed plan for executing this task, then carry it out step by step.
         For each step, explain what you're doing and why.
