@@ -849,53 +849,66 @@ Create a thoughtful response that continues the conversation and demonstrates yo
       // Start the autonomous agent
       this.autonomousAgent.start();
       
-      // Create and execute initial plan
-      await this.createAndExecutePlan();
-      
-      // Post an initial tweet
-      logger.info('Posting immediate startup tweet...');
+      // First do quick research to generate insight for startup tweet
+      logger.info('Conducting initial research for startup tweet...');
       try {
-        // Generate initial tweet
-        const initialTweetResult = await this.baseAgent.run({
-          task: `Generate an insightful tweet announcing that you are online and monitoring the crypto markets, with a focus on AI-related tokens.
-          
-The tweet should:
-1. Establish your expertise in crypto analysis
-2. Mention your focus on AI tokens
-3. Invite engagement from followers
-4. Be concise (under 240 chars)
-5. Be professional but conversational
-6. NOT include hashtags`
+        // Research trending tokens first
+        await this.executeResearchTask({
+          description: "Research trending AI tokens for initial tweet",
+          type: "research"
         });
         
-        // Post directly using the Twitter connector
-        const tweetId = await this.twitterConnector.tweet(initialTweetResult.response);
+        // Get the most recent research
+        const recentResearch = await this.memory.searchNotes({
+          query: "token research AI crypto",
+          category: "research",
+          limit: 1
+        });
         
-        // Log success
-        logger.info('Initial tweet posted successfully!', { tweetId });
-        
-        // Also kick off the research process in the background
-        setTimeout(async () => {
-          try {
-            // Research trending tokens
-            await this.executeResearchTask({
-              description: "Research trending AI tokens for initial tweet",
-              type: "research"
-            });
+        if (recentResearch.length > 0) {
+          // Extract token name if possible
+          const tokenMatch = recentResearch[0].title.match(/Research: ([A-Z0-9]+)/);
+          const tokenSymbol = tokenMatch ? tokenMatch[1] : "AI crypto";
+          
+          logger.info(`Found research on ${tokenSymbol} for startup tweet`);
+          
+          // Generate tweet with actual insight
+          const initialTweetResult = await this.baseAgent.run({
+            task: `Based on this research about ${tokenSymbol}:
             
-            // Analyze the most promising token
-            await this.executeAnalysisTask({
-              description: "Analyze top AI token for initial tweet",
-              type: "analyze"
-            });
-          } catch (error) {
-            logger.error('Error in background research task', error);
-          }
-        }, 5000);
-      } catch (tweetError) {
-        logger.error('Error posting initial tweet', tweetError);
-        // Continue agent startup despite tweet error
+${recentResearch[0].content.substring(0, 500)}...
+
+Create an insightful first tweet that:
+1. Mentions a specific insight about ${tokenSymbol}
+2. Establishes your expertise in crypto analysis
+3. Mentions your focus on AI tokens
+4. Is concise (under 240 chars)
+5. Uses $${tokenSymbol} format
+6. Is professional but conversational
+7. Does NOT include hashtags
+
+The tweet should read as a substantive insight, not as an introduction.`
+          });
+          
+          // Post directly using the Twitter connector
+          const tweetId = await this.twitterConnector.tweet(initialTweetResult.response);
+          
+          // Log success
+          logger.info('Initial insight tweet posted successfully!', { tweetId });
+        } else {
+          // Fallback to generic tweet if no research found
+          logger.info('No research found, posting generic startup tweet');
+          await this.postGenericStartupTweet();
+        }
+      } catch (researchError) {
+        logger.error('Error researching for startup tweet', researchError);
+        
+        // Fallback to generic tweet
+        await this.postGenericStartupTweet();
       }
+      
+      // Now execute the full plan
+      await this.createAndExecutePlan();
       
       // Mark as running
       this.isRunning = true;
@@ -911,8 +924,49 @@ The tweet should:
         }
       }, planningIntervalMs);
     } catch (error) {
-      logger.error('Failed to start agent', error);
+      logger.error('Error in agent startup', error);
       throw error;
+    }
+  }
+  
+  /**
+   * Post a generic startup tweet as fallback
+   */
+  private async postGenericStartupTweet(): Promise<void> {
+    try {
+      logger.info('Posting generic startup tweet...');
+      
+      // Generate initial tweet
+      const initialTweetResult = await this.baseAgent.run({
+        task: `Generate an insightful tweet announcing that you are online and monitoring the crypto markets, with a focus on AI-related tokens.
+        
+The tweet should:
+1. Establish your expertise in crypto analysis
+2. Mention your focus on AI tokens
+3. Invite engagement from followers
+4. Be concise (under 240 chars)
+5. Be professional but conversational
+6. NOT include hashtags`
+      });
+      
+      // Post directly using the Twitter connector
+      const tweetId = await this.twitterConnector.tweet(initialTweetResult.response);
+      
+      // Log success
+      logger.info('Generic startup tweet posted successfully!', { tweetId });
+    } catch (tweetError) {
+      logger.error('Error posting generic startup tweet', tweetError);
+      
+      // Try one more alternative approach if the generic tweet fails
+      try {
+        logger.info('Trying alternative approach for startup tweet...');
+        await this.executeTweetTask({
+          description: "Initial startup tweet about AI crypto analysis",
+          type: "tweet"
+        });
+      } catch (altError) {
+        logger.error('Alternative tweet approach also failed', altError);
+      }
     }
   }
   
@@ -951,7 +1005,7 @@ The tweet should:
     try {
       logger.info('Creating execution plan...');
       
-      // Simplified approach with predefined tasks
+      // Simplified approach with predefined tasks - removed follow_up task
       const plan = {
         id: `plan_${Date.now()}`,
         originalTask: "Research AI-related crypto tokens and share insights via Twitter",
@@ -976,13 +1030,6 @@ The tweet should:
             dependencies: [`task_${Date.now()}_2`],
             status: "pending",
             type: "tweet"
-          },
-          {
-            id: `task_${Date.now()}_4`,
-            description: "Follow up on previous predictions",
-            dependencies: [],
-            status: "pending",
-            type: "follow_up"
           }
         ],
         created: Date.now(),
@@ -1049,10 +1096,6 @@ The tweet should:
         
       case 'tweet':
         await this.executeTweetTask(task);
-        break;
-        
-      case 'follow_up':
-        await this.executeFollowUpTask(task);
         break;
         
       default:
