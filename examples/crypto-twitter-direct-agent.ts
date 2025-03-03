@@ -120,25 +120,41 @@ class CryptoAnalysisTool {
         );
       }
       
-      // If focus areas provided, prioritize tokens that match
+      // If focus areas provided, add a more flexible scoring system with randomness
       if (options.focusAreas && options.focusAreas.length > 0) {
-        // This is a naive approach - in a real scenario, you'd need better
-        // semantic matching or additional data sources
-        tokens.sort((a: TokenData, b: TokenData) => {
-          const aMatches = options.focusAreas!.some(area => 
-            a.name.toLowerCase().includes(area.toLowerCase()) || 
-            a.symbol.toLowerCase().includes(area.toLowerCase())
+        // Assign scores and add randomness to avoid always prioritizing the same tokens
+        const scoredTokens = tokens.map((token: TokenData) => {
+          let score = 0;
+          
+          // Basic score based on match with focus areas
+          const matches = options.focusAreas!.filter(area => 
+            token.name.toLowerCase().includes(area.toLowerCase()) || 
+            token.symbol.toLowerCase().includes(area.toLowerCase())
           );
           
-          const bMatches = options.focusAreas!.some(area => 
-            b.name.toLowerCase().includes(area.toLowerCase()) || 
-            b.symbol.toLowerCase().includes(area.toLowerCase())
-          );
+          // Assign score based on matches (up to 5 points)
+          score += Math.min(matches.length * 2, 5);
           
-          if (aMatches && !bMatches) return -1;
-          if (!aMatches && bMatches) return 1;
-          return 0;
+          // Add points for price movement (up to 3 points)
+          score += Math.min(Math.abs(token.priceChange24h) / 5, 3);
+          
+          // Add random factor (0-4 points) to diversify results
+          score += Math.random() * 4;
+          
+          // Explicitly avoid overweighting "AI16z" or similar tokens
+          if (token.symbol === 'AI16Z' || token.symbol === 'AI16z') {
+            // Slightly reduce score for this token to ensure diversity
+            score *= 0.7;
+          }
+          
+          return { token, score };
         });
+        
+        // Sort by score (descending)
+        scoredTokens.sort((a, b) => b.score - a.score);
+        
+        // Replace tokens array with scored tokens
+        tokens = scoredTokens.map(item => item.token);
       }
       
       return {
@@ -227,7 +243,7 @@ class CryptoTwitterDirectAgent {
     tweetFrequencyHours: 1, // Tweet every hour
     analysisFrequencyHours: 2,
     researchDepth: 'medium',
-    focusAreas: ['AI', 'artificial intelligence', 'ML', 'machine learning', 'data', 'analytics']
+    focusAreas: ['crypto', 'defi', 'blockchain', 'web3', 'finance', 'technology'] // More general focus areas
   };
   
   /**
@@ -260,13 +276,13 @@ class CryptoTwitterDirectAgent {
    */
   private setupGoals(): void {
     this.currentGoals = [
-      "Identify promising crypto tokens related to AI and ML technologies",
-      "Analyze their market potential and technical fundamentals",
-      "Generate insights about their use cases and potential value",
+      "Identify promising crypto tokens across various technologies and sectors",
+      "Analyze their market potential, tokenomics, and technical fundamentals",
+      "Generate insights about their use cases and potential value propositions",
       "Share analysis via Twitter with substantiated predictions",
       "Follow up on previous predictions to build credibility",
       "Engage with Twitter users by responding to mentions and questions",
-      "Monitor trending topics in crypto and AI to identify new opportunities"
+      "Monitor trending topics in crypto to identify new opportunities"
     ];
   }
   
@@ -852,15 +868,15 @@ Create a thoughtful response that continues the conversation and demonstrates yo
       // First do quick research to generate insight for startup tweet
       logger.info('Conducting initial research for startup tweet...');
       try {
-        // Research trending tokens first
+        // Research trending tokens first (not just AI)
         await this.executeResearchTask({
-          description: "Research trending AI tokens for initial tweet",
+          description: "Research trending crypto tokens for initial tweet",
           type: "research"
         });
         
-        // Get the most recent research
+        // Get the most recent research - don't filter specifically for AI
         const recentResearch = await this.memory.searchNotes({
-          query: "token research AI crypto",
+          query: "token research crypto",
           category: "research",
           limit: 1
         });
@@ -872,6 +888,11 @@ Create a thoughtful response that continues the conversation and demonstrates yo
           
           logger.info(`Found research on ${tokenSymbol} for startup tweet`);
           
+          // Determine if this is an AI-related token
+          const isAiToken = tokenSymbol.toLowerCase().includes('ai') || 
+                            recentResearch[0].content.toLowerCase().includes(' ai ') ||
+                            recentResearch[0].content.toLowerCase().includes('artificial intelligence');
+          
           // Generate tweet with actual insight
           const initialTweetResult = await this.baseAgent.run({
             task: `Based on this research about ${tokenSymbol}:
@@ -881,7 +902,7 @@ ${recentResearch[0].content.substring(0, 500)}...
 Create an insightful first tweet that:
 1. Mentions a specific insight about ${tokenSymbol}
 2. Establishes your expertise in crypto analysis
-3. Mentions your focus on AI tokens
+3. ${isAiToken ? 'Mentions your knowledge of this token specifically' : 'Focuses on blockchain technology and trends'}
 4. Is concise (under 240 chars)
 5. Uses $${tokenSymbol} format
 6. Is professional but conversational
@@ -936,13 +957,13 @@ The tweet should read as a substantive insight, not as an introduction.`
     try {
       logger.info('Posting generic startup tweet...');
       
-      // Generate initial tweet
+      // Generate initial tweet - more general focus
       const initialTweetResult = await this.baseAgent.run({
-        task: `Generate an insightful tweet announcing that you are online and monitoring the crypto markets, with a focus on AI-related tokens.
+        task: `Generate an insightful tweet announcing that you are online and monitoring the crypto markets, with expertise across various blockchain technologies.
         
 The tweet should:
-1. Establish your expertise in crypto analysis
-2. Mention your focus on AI tokens
+1. Establish your expertise in crypto and blockchain analysis
+2. Mention your focus on emerging projects and trends
 3. Invite engagement from followers
 4. Be concise (under 240 chars)
 5. Be professional but conversational
@@ -961,7 +982,7 @@ The tweet should:
       try {
         logger.info('Trying alternative approach for startup tweet...');
         await this.executeTweetTask({
-          description: "Initial startup tweet about AI crypto analysis",
+          description: "Initial startup tweet about blockchain and crypto analysis",
           type: "tweet"
         });
       } catch (altError) {
@@ -1135,22 +1156,71 @@ The tweet should:
     logger.info(`Executing research task: ${task.description}`);
     
     try {
-      // Find promising tokens
+      // Find promising tokens - reduce minPriceChange to get more options
       const trendingResult = await this.cryptoTool.getTrendingTokens({
-        limit: 15,
-        minPriceChange: 5,
-        focusAreas: this.settings.focusAreas
+        limit: 20, // Increase limit to get more options
+        minPriceChange: 3, // Reduced from 5 for more variety
+        focusAreas: this.settings.focusAreas // Using our updated more general focus areas
       });
       
       logger.info(`Found ${trendingResult.tokens.length} trending tokens`);
       
-      // For each interesting token, gather basic information
-      for (const token of trendingResult.tokens.slice(0, 3)) {
+      // Create a set to track tokens we've recently researched to avoid repetition
+      const recentResearch = await this.memory.searchNotes({
+        query: "token research",
+        category: "research",
+        limit: 10
+      });
+      
+      const recentTokens = new Set(
+        recentResearch
+          .map(note => {
+            const match = note.title.match(/Research: ([A-Z0-9]+)/);
+            return match ? match[1] : null;
+          })
+          .filter(Boolean)
+      );
+      
+      logger.info(`Found ${recentTokens.size} recently researched tokens to avoid duplicating`);
+      
+      // Filter out recently researched tokens
+      let eligibleTokens = trendingResult.tokens.filter(token => 
+        !recentTokens.has(token.symbol)
+      );
+      
+      // If we filtered out too many, keep some of the originals
+      if (eligibleTokens.length < 3) {
+        logger.info(`Not enough new tokens, selecting from all trending tokens`);
+        eligibleTokens = trendingResult.tokens;
+      }
+      
+      // Select a diverse set - take at most 1 AI-related token plus 2 others
+      const aiTokens = eligibleTokens.filter(token => 
+        token.name.toLowerCase().includes('ai') || 
+        token.symbol.toLowerCase().includes('ai')
+      ).slice(0, 1);
+      
+      const nonAiTokens = eligibleTokens.filter(token => 
+        !(token.name.toLowerCase().includes('ai') || 
+          token.symbol.toLowerCase().includes('ai'))
+      );
+      
+      // Randomly select from non-AI tokens
+      const randomNonAiTokens = nonAiTokens
+        .sort(() => 0.5 - Math.random()) // Simple random shuffle
+        .slice(0, 3 - aiTokens.length);
+      
+      // Combine and process tokens
+      const tokensToResearch = [...aiTokens, ...randomNonAiTokens];
+      logger.info(`Selected ${tokensToResearch.length} diverse tokens for research`);
+      
+      // For each selected token, gather basic information
+      for (const token of tokensToResearch) {
         try {
           logger.info(`Researching token: ${token.name} (${token.symbol})`);
           
-          // Use the Tavily search tool to gather information
-          const searchQuery = `${token.name} ${token.symbol} crypto token AI machine learning use case project details`;
+          // Use the Tavily search tool to gather information - generalize search query
+          const searchQuery = `${token.name} ${token.symbol} crypto token project details use case`;
           
           const searchResults = await this.searchTool.execute({
             query: searchQuery,
@@ -1182,7 +1252,7 @@ The tweet should:
               ${sourcesList}
             `,
             category: 'research',
-            tags: ['crypto', 'token', token.symbol, 'AI', 'research'],
+            tags: ['crypto', 'token', token.symbol, 'research'],
             timestamp: Date.now()
           });
           
@@ -1256,18 +1326,19 @@ The tweet should:
         return;
       }
       
-      // Generate prompt for analysis
+      // Generate prompt for analysis - make it more general and not just focused on AI
       const analysisPrompt = `
-        As a crypto analyst specializing in AI-related tokens, analyze this token:
+        As a crypto analyst with broad expertise in blockchain technologies, analyze this token:
         
         ${tokenResearch[0].content}
         
         Provide a comprehensive analysis focusing on:
         1. Use case and technology overview
         2. Market potential and adoption
-        3. Technical fundamentals
+        3. Technical fundamentals and tokenomics
         4. Development activity and team
         5. Short and medium-term outlook
+        6. Unique selling proposition and competitive advantages
         
         Be objective and balanced in your assessment. Identify both strengths and weaknesses.
       `;
@@ -1275,12 +1346,22 @@ The tweet should:
       // Generate analysis using the autonomous agent
       const analysisResult = await this.autonomousAgent.runOperation<{ response: string }>(analysisPrompt);
       
-      // Store the analysis in memory
+      // Store the analysis in memory with appropriate tags
+      const isAiToken = symbol.toLowerCase().includes('ai') || 
+                        analysisResult.response.toLowerCase().includes(' ai ') ||
+                        analysisResult.response.toLowerCase().includes('artificial intelligence');
+      
+      const tags = ['crypto', 'token', symbol, 'analysis'];
+      // Only add AI tag if it's actually an AI token
+      if (isAiToken) {
+        tags.push('AI');
+      }
+      
       await this.memory.addNote({
         title: `Analysis: ${symbol}`,
         content: analysisResult.response,
         category: 'analysis',
-        tags: ['crypto', 'token', symbol, 'AI', 'analysis'],
+        tags,
         timestamp: Date.now()
       });
       
@@ -1310,22 +1391,34 @@ The tweet should:
       const personalityTraits = 
         this.personality.persona?.personality?.traits || ['analytical', 'insightful'];
       
+      // Determine if this is an AI-related token
+      const isAiToken = symbol.toLowerCase().includes('ai') || 
+                        analysis.toLowerCase().includes(' ai ') ||
+                        analysis.toLowerCase().includes('artificial intelligence');
+      
+      // Create a personalized expertise description
+      let expertiseDesc = "a crypto market analyst specializing in blockchain technologies";
+      if (isAiToken) {
+        expertiseDesc += " with expertise in AI and ML applications";
+      }
+      
       const tweetPrompt = `
         Based on this analysis of ${symbol}:
         
         ${analysis.substring(0, 500)}...
         
-        You are ${personalityName}, a crypto market analyst specializing in AI tokens.
-        Your expertise allows you to identify market patterns before others see them.
+        You are ${personalityName}, ${expertiseDesc}.
+        Your expertise allows you to identify market patterns and token potential.
         Your personality traits are: ${Array.isArray(personalityTraits) ? personalityTraits.join(', ') : 'analytical, confident'}.
         
         Create a concise, informative tweet (under 240 chars) that:
-        1. Mentions a specific insight about the token
-        2. Includes a substantiated opinion or prediction
+        1. Mentions a specific insight about ${symbol} token
+        2. Includes a substantiated opinion or prediction 
         3. Uses $${symbol} format
         4. MUST NOT include any hashtags
         5. Matches your sophisticated, confident but measured tone
         6. Shows your technical expertise while remaining accessible
+        7. Focuses on the token's unique value proposition
         
         Only return the tweet text.
       `;
@@ -1333,8 +1426,10 @@ The tweet should:
       // Generate tweet using base agent for reliability
       const tweetResult = await this.baseAgent.run({ task: tweetPrompt });
       
-      // Post immediately if requested, otherwise post with a minor delay
-      const delay = immediate ? 60000 : 300000; // 1 minute vs 5 minutes
+      // Use a random delay between 1-5 minutes for more natural posting pattern
+      const minDelay = immediate ? 30000 : 120000; // 30 seconds or 2 minutes
+      const maxDelay = immediate ? 90000 : 300000; // 1.5 or 5 minutes
+      const delay = Math.floor(Math.random() * (maxDelay - minDelay + 1)) + minDelay;
       
       setTimeout(async () => {
         try {
@@ -1347,7 +1442,7 @@ The tweet should:
         }
       }, delay);
       
-      logger.info(`Scheduled tweet about ${symbol} to post in ${delay/60000} minutes`);
+      logger.info(`Scheduled tweet about ${symbol} to post in ${(delay/60000).toFixed(1)} minutes`);
     } catch (error) {
       logger.error(`Error scheduling tweet for ${symbol}`, error);
     }
@@ -1373,9 +1468,9 @@ The tweet should:
         // Generate tweet for specific token
         await this.generateTweetForToken(targetSymbol, isInitial);
       } else {
-        // Get recent analyses from memory
+        // Get recent analyses from memory - search for all tokens, not just AI
         const recentAnalyses = await this.memory.searchNotes({
-          query: "token analysis AI crypto",
+          query: "token analysis crypto",
           category: "analysis",
           limit: isInitial ? 1 : 2  // For initial tweet, just get the most relevant one
         });
