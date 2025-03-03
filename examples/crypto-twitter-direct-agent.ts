@@ -24,6 +24,7 @@ import { TwitterDirectConnector } from '../src/platform-connectors/twitter-direc
 import { Logger } from '../src/utils/logger';
 import { TavilySearchTool } from '../src/tools/tavily-search-tool';
 import { BirdEyeTrendingTool } from '../src/tools/birdeye-trending-tool';
+import { BirdEyeTokenOverviewTool } from '../src/tools/birdeye-token-overview-tool';
 import { ToolRegistry } from '../src/tools/tool-registry';
 import { 
   PersonalityUtils, 
@@ -227,6 +228,7 @@ class CryptoTwitterDirectAgent {
   // Tools
   private cryptoTool: CryptoAnalysisTool;
   private searchTool: TavilySearchTool;
+  private tokenOverviewTool: BirdEyeTokenOverviewTool;
   
   // Memory system
   private embeddingService!: EmbeddingService;
@@ -265,6 +267,7 @@ class CryptoTwitterDirectAgent {
     // Initialize tools
     this.cryptoTool = new CryptoAnalysisTool();
     this.searchTool = new TavilySearchTool();
+    this.tokenOverviewTool = new BirdEyeTokenOverviewTool();
     this.planner = new EnhancedPlanner();
     
     // Set up high-level goals for the agent
@@ -282,7 +285,10 @@ class CryptoTwitterDirectAgent {
       "Share analysis via Twitter with substantiated predictions",
       "Follow up on previous predictions to build credibility",
       "Engage with Twitter users by responding to mentions and questions",
-      "Monitor trending topics in crypto to identify new opportunities"
+      "Monitor trending topics in crypto to identify new opportunities",
+      "Browse Twitter timeline to discover and engage with relevant content",
+      "Participate in crypto conversations by liking and retweeting valuable content",
+      "Search for specific crypto topics to join ongoing discussions"
     ];
   }
   
@@ -396,6 +402,14 @@ class CryptoTwitterDirectAgent {
       logger.debug('Registered BirdEye trending tool');
     } catch (error) {
       logger.warn('Failed to register BirdEye trending tool', error);
+    }
+    
+    // Register BirdEye token overview tool
+    try {
+      registry.registerTool(this.tokenOverviewTool);
+      logger.debug('Registered BirdEye token overview tool');
+    } catch (error) {
+      logger.warn('Failed to register BirdEye token overview tool', error);
     }
   }
   
@@ -874,6 +888,13 @@ Create a thoughtful response that continues the conversation and demonstrates yo
           type: "research"
         });
         
+        // Browse the timeline to start engaging with content right away
+        logger.info('Starting initial timeline browsing to engage with community...');
+        await this.executeBrowseTimelineTask({
+          description: "Initial browse of Twitter timeline to find relevant content",
+          type: "browse_timeline"
+        });
+        
         // Get the most recent research - don't filter specifically for AI
         const recentResearch = await this.memory.searchNotes({
           query: "token research crypto",
@@ -907,12 +928,37 @@ Create an insightful first tweet that:
 5. Uses $${tokenSymbol} format
 6. Is professional but conversational
 7. Does NOT include hashtags
+8. NEVER starts with phrases like "Look," or "I think" - start directly with your analysis
 
-The tweet should read as a substantive insight, not as an introduction.`
+Here are examples of the tweet style to emulate:
+
+"$ADA fundamentally overvalued at current levels. TVL to market cap ratio remains absurd, and promised developer activity isn't materializing. Token metrics suggesting 30-40% correction likely before finding equilibrium. Positioning accordingly."
+
+"$SOL accumulation patterns mirror ETH in 2016 - smart money positioning before significant developer migration. Three leading ETH projects already quietly building Solana implementations. Technical advantages becoming impossible to ignore."
+
+The tweet should read as a substantive insight, not as an introduction. Model your tweet after these examples - direct, insightful, and starting with the key point without introductory phrases.`
           });
           
+          // Process the tweet text to remove common prefixes if they still appear
+          let tweetText = initialTweetResult.response.trim();
+          
+          // Remove common prefixes if they still appear
+          const prefixesToRemove = [
+            "Look, ", "Look: ", "I think ", "I believe ", "In my opinion, ", 
+            "In my analysis, ", "My take: ", "Analysis: "
+          ];
+          
+          for (const prefix of prefixesToRemove) {
+            if (tweetText.startsWith(prefix)) {
+              tweetText = tweetText.substring(prefix.length);
+              // Capitalize first letter of new start if needed
+              tweetText = tweetText.charAt(0).toUpperCase() + tweetText.slice(1);
+              break;
+            }
+          }
+          
           // Post directly using the Twitter connector
-          const tweetId = await this.twitterConnector.tweet(initialTweetResult.response);
+          const tweetId = await this.twitterConnector.tweet(tweetText);
           
           // Log success
           logger.info('Initial insight tweet posted successfully!', { tweetId });
@@ -921,6 +967,14 @@ The tweet should read as a substantive insight, not as an introduction.`
           logger.info('No research found, posting generic startup tweet');
           await this.postGenericStartupTweet();
         }
+        
+        // Check trending topics right after startup
+        logger.info('Exploring trending topics as part of startup...');
+        await this.executeExploreTopicsTask({
+          description: "Explore trending crypto topics to join relevant conversations",
+          type: "explore_topics"
+        });
+        
       } catch (researchError) {
         logger.error('Error researching for startup tweet', researchError);
         
@@ -967,11 +1021,39 @@ The tweet should:
 3. Invite engagement from followers
 4. Be concise (under 240 chars)
 5. Be professional but conversational
-6. NOT include hashtags`
+6. NOT include hashtags
+7. NEVER start with phrases like "Look," or "I'm" or "I am" - start directly with substantive content
+8. Use a direct, professional style without unnecessary introductory phrases
+
+Here are examples of the direct style to emulate:
+
+"Tracking significant capital flows into decentralized AI infrastructure projects this week. Three key blockchain protocols showing 40%+ increase in developer activity. Will be analyzing these protocols and sharing insights on tokenomics and scaling potential."
+
+"Crypto market analysis now focusing on the convergence of AI and blockchain technologies. Monitoring projects building actual infrastructure rather than hype. Direct insights on promising tokens and market trends coming daily."
+
+Model your tweet after these examples - direct, professional, and focused on the value you provide without unnecessary introductory phrases.`
       });
       
+      // Process the tweet text to remove common prefixes if they still appear
+      let tweetText = initialTweetResult.response.trim();
+      
+      // Remove common prefixes if they still appear
+      const prefixesToRemove = [
+        "Look, ", "Look: ", "I think ", "I believe ", "In my opinion, ", 
+        "In my analysis, ", "My take: ", "Analysis: ", "I'm ", "I am "
+      ];
+      
+      for (const prefix of prefixesToRemove) {
+        if (tweetText.startsWith(prefix)) {
+          tweetText = tweetText.substring(prefix.length);
+          // Capitalize first letter of new start if needed
+          tweetText = tweetText.charAt(0).toUpperCase() + tweetText.slice(1);
+          break;
+        }
+      }
+      
       // Post directly using the Twitter connector
-      const tweetId = await this.twitterConnector.tweet(initialTweetResult.response);
+      const tweetId = await this.twitterConnector.tweet(tweetText);
       
       // Log success
       logger.info('Generic startup tweet posted successfully!', { tweetId });
@@ -1040,31 +1122,59 @@ The tweet should:
           },
           {
             id: `task_${Date.now()}_2`,
+            description: "Analyze large-cap tokens for significant price moves and key metrics",
+            dependencies: [],
+            status: "pending",
+            type: "largecap_analysis"
+          },
+          {
+            id: `task_${Date.now()}_3`,
             description: "Analyze the most promising tokens and industry trends",
             dependencies: [`task_${Date.now()}_1`],
             status: "pending",
             type: "analyze"
           },
           {
-            id: `task_${Date.now()}_3`,
+            id: `task_${Date.now()}_4`,
             description: "Generate and post tweets with token insights",
-            dependencies: [`task_${Date.now()}_2`],
+            dependencies: [`task_${Date.now()}_3`],
             status: "pending",
             type: "tweet"
           },
           {
-            id: `task_${Date.now()}_4`,
-            description: "Share broader thoughts on blockchain technology trends",
+            id: `task_${Date.now()}_5`,
+            description: "Share large-cap token predictions and analysis",
             dependencies: [`task_${Date.now()}_2`],
+            status: "pending",
+            type: "largecap_tweet"
+          },
+          {
+            id: `task_${Date.now()}_6`,
+            description: "Share broader thoughts on blockchain technology trends",
+            dependencies: [`task_${Date.now()}_3`],
             status: "pending",
             type: "industry_tweet"
           },
           {
-            id: `task_${Date.now()}_5`,
+            id: `task_${Date.now()}_7`,
             description: "Monitor and engage with community by following up on previous tweets",
             dependencies: [],
             status: "pending",
             type: "follow_up" 
+          },
+          {
+            id: `task_${Date.now()}_8`,
+            description: "Browse Twitter timeline and discover relevant content to engage with",
+            dependencies: [],
+            status: "pending",
+            type: "browse_timeline"
+          },
+          {
+            id: `task_${Date.now()}_9`,
+            description: "Search and explore trending crypto topics to join conversations",
+            dependencies: [],
+            status: "pending",
+            type: "explore_topics"
           }
         ],
         created: Date.now(),
@@ -1137,8 +1247,24 @@ The tweet should:
         await this.executeIndustryTweetTask(task);
         break;
         
+      case 'largecap_analysis':
+        await this.executeLargeCapAnalysisTask(task);
+        break;
+        
+      case 'largecap_tweet':
+        await this.executeLargeCapTweetTask(task);
+        break;
+        
       case 'follow_up':
         await this.executeFollowUpTask(task);
+        break;
+        
+      case 'browse_timeline':
+        await this.executeBrowseTimelineTask(task);
+        break;
+        
+      case 'explore_topics':
+        await this.executeExploreTopicsTask(task);
         break;
         
       default:
@@ -1158,14 +1284,24 @@ The tweet should:
     
     if (lowerDesc.includes('research') || lowerDesc.includes('find') || lowerDesc.includes('search')) {
       return 'research';
+    } else if (lowerDesc.includes('large-cap') || lowerDesc.includes('largecap') || lowerDesc.includes('major tokens')) {
+      if (lowerDesc.includes('tweet') || lowerDesc.includes('post') || lowerDesc.includes('share')) {
+        return 'largecap_tweet';
+      } else {
+        return 'largecap_analysis';
+      }
     } else if (lowerDesc.includes('analyze') || lowerDesc.includes('analysis')) {
       return 'analyze';
     } else if (lowerDesc.includes('industry') || lowerDesc.includes('trends') || lowerDesc.includes('thoughts') || lowerDesc.includes('broader')) {
       return 'industry_tweet';
-    } else if (lowerDesc.includes('tweet') || lowerDesc.includes('post')) {
+    } else if (lowerDesc.includes('tweet') || lowerDesc.includes('post') || lowerDesc.includes('share')) {
       return 'tweet';
     } else if (lowerDesc.includes('follow up') || lowerDesc.includes('track') || lowerDesc.includes('monitor') || lowerDesc.includes('engage')) {
       return 'follow_up';
+    } else if (lowerDesc.includes('browse') && lowerDesc.includes('timeline')) {
+      return 'browse_timeline';
+    } else if (lowerDesc.includes('explore') || lowerDesc.includes('trending topics') || lowerDesc.includes('join conversations')) {
+      return 'explore_topics';
     }
     
     return 'generic';
@@ -1443,12 +1579,42 @@ The tweet should:
         5. Matches your sophisticated, confident but measured tone
         6. Shows your technical expertise while remaining accessible
         7. Focuses on the token's unique value proposition
+        8. NEVER starts with phrases like "Look," or "I think" or similar - start directly with your analysis
+        9. Uses a direct, professional tone that gets straight to the point
+        
+        Here are examples of the tweet style to emulate:
+        
+        "$ADA fundamentally overvalued at current levels. TVL to market cap ratio remains absurd, and promised developer activity isn't materializing. Token metrics suggesting 30-40% correction likely before finding equilibrium. Positioning accordingly."
+        
+        "$SOL accumulation patterns mirror ETH in 2016 - smart money positioning before significant developer migration. Three leading ETH projects already quietly building Solana implementations. Technical advantages becoming impossible to ignore."
+        
+        "The AI token market bifurcation has begun. Projects with legitimate ML infrastructure solving actual compute problems up 40%. Vaporware "AI chains" with no working product down 60%. This filtering process will accelerate through Q4."
+        
+        Model your tweet after these examples - direct, insightful, and starting with the key point without introductory phrases.
         
         Only return the tweet text.
       `;
       
       // Generate tweet using base agent for reliability
       const tweetResult = await this.baseAgent.run({ task: tweetPrompt });
+      
+      // Process the tweet text to remove common prefixes if they still appear
+      let tweetText = tweetResult.response.trim();
+      
+      // Remove common prefixes like "Look," if they still appear
+      const prefixesToRemove = [
+        "Look, ", "Look: ", "I think ", "I believe ", "In my opinion, ", 
+        "In my analysis, ", "My take: ", "Analysis: "
+      ];
+      
+      for (const prefix of prefixesToRemove) {
+        if (tweetText.startsWith(prefix)) {
+          tweetText = tweetText.substring(prefix.length);
+          // Capitalize first letter of new start if needed
+          tweetText = tweetText.charAt(0).toUpperCase() + tweetText.slice(1);
+          break;
+        }
+      }
       
       // Use a random delay between 1-5 minutes for more natural posting pattern
       const minDelay = immediate ? 30000 : 120000; // 30 seconds or 2 minutes
@@ -1458,7 +1624,7 @@ The tweet should:
       setTimeout(async () => {
         try {
           // Post directly using Twitter connector
-          const tweetId = await this.twitterConnector.tweet(tweetResult.response);
+          const tweetId = await this.twitterConnector.tweet(tweetText);
           
           logger.info(`Posted tweet about ${symbol} analysis`, { tweetId });
         } catch (error) {
@@ -1701,6 +1867,12 @@ The tweet should:
           }
         }
         
+        // Browse timeline for relevant content to engage with
+        await this.browseAndEngageWithTimeline();
+        
+        // Browse crypto topics and trending discussions
+        await this.exploreTrendingTopics();
+        
         // Like and respond to mentions
         try {
           const mentions = await this.twitterConnector.searchTweets(`@${myUsername}`, 5);
@@ -1835,6 +2007,226 @@ The tweet should:
       }
     } catch (error) {
       logger.error(`Error generating generic follow-up tweet`, error);
+    }
+  }
+  
+  /**
+   * Execute a large-cap token analysis task
+   * 
+   * @param task - Large-cap analysis task
+   */
+  private async executeLargeCapAnalysisTask(task: any): Promise<void> {
+    logger.info(`Executing large-cap token analysis task: ${task.description}`);
+    
+    try {
+      // List of large-cap tokens to analyze
+      const largeCapTokens = [
+        'SOL', 'BTC', 'ETH', 'BONK', 'JUP', 'PYTH', 'RNDR'
+      ];
+      
+      logger.info(`Analyzing ${largeCapTokens.length} large-cap tokens`);
+      
+      // Create a set to track tokens we've recently analyzed to avoid repetition
+      const recentAnalyses = await this.memory.searchNotes({
+        query: "large-cap analysis",
+        category: "largecap_analysis",
+        limit: 5
+      });
+      
+      const recentTokens = new Set(
+        recentAnalyses
+          .map(note => {
+            const match = note.title.match(/Analysis: ([A-Z0-9]+)/);
+            return match ? match[1] : null;
+          })
+          .filter(Boolean)
+      );
+      
+      // Analyze each token
+      for (const token of largeCapTokens) {
+        try {
+          // Skip if we've analyzed this token recently (within last 4-8 hours)
+          if (recentTokens.has(token)) {
+            logger.info(`Skipping recently analyzed large-cap token: ${token}`);
+            continue;
+          }
+          
+          logger.info(`Analyzing large-cap token: ${token}`);
+          
+          let tokenData;
+          try {
+            // Use the token overview tool to get detailed data
+            tokenData = await this.tokenOverviewTool.execute({
+              token: token
+            });
+            
+            if (!tokenData || !tokenData.token) {
+              logger.warn(`Failed to get data for token: ${token}`);
+              continue;
+            }
+          } catch (tokenError) {
+            logger.error(`Error getting token data for ${token}`, tokenError);
+            continue;
+          }
+          
+          // Prepare context data for analysis
+          const data = tokenData.token;
+          
+          // Check if this token has significant price movement
+          const priceChange24h = data.priceChange24h || 0;
+          const priceChange1h = data.metrics?.last1Hour?.priceChange || 0;
+          const volume24hUSD = data.volume24hUSD || 0;
+          const volumeChangePercent = data.volume24hChangePercent || 0;
+          
+          // Calculate buy/sell ratio if available
+          let buySellRatio = 1;
+          if (data.metrics?.last24Hours?.buys && data.metrics?.last24Hours?.sells && 
+              data.metrics.last24Hours.sells > 0) {
+            buySellRatio = data.metrics.last24Hours.buys / data.metrics.last24Hours.sells;
+          }
+          
+          const hasSignificantMovement = Math.abs(priceChange24h) > 5 || Math.abs(priceChange1h) > 2 || 
+                                         Math.abs(volumeChangePercent) > 20 || 
+                                         buySellRatio > 1.2 || buySellRatio < 0.8;
+          
+          // Only create deeper analysis for tokens with significant movement
+          if (!hasSignificantMovement) {
+            logger.info(`Skipping ${token} - no significant movement detected`);
+            continue;
+          }
+          
+          // Construct summary of key metrics and indicators
+          const marketSummary = `
+            Token: ${data.name} (${data.symbol})
+            Current Price: $${data.price?.toFixed(6) || 'N/A'}
+            
+            Key Price Movements:
+            - 24h Change: ${priceChange24h?.toFixed(2) || 'N/A'}%
+            - 1h Change: ${priceChange1h?.toFixed(2) || 'N/A'}%
+            
+            Trading Activity:
+            - 24h Volume: $${(volume24hUSD / 1000000).toFixed(2) || 'N/A'} million
+            - Volume Change: ${volumeChangePercent?.toFixed(2) || 'N/A'}%
+            - Buy/Sell Ratio: ${buySellRatio.toFixed(2) || 'N/A'}
+            
+            Market Metrics:
+            - Market Cap: $${(data.marketCap / 1000000000).toFixed(2) || 'N/A'} billion
+            - Liquidity: $${(data.liquidity / 1000000).toFixed(2) || 'N/A'} million
+            - Holders: ${data.holders?.toLocaleString() || 'N/A'}
+            
+            Project Information:
+            - Website: ${data.links?.website || 'N/A'}
+            - Twitter: ${data.links?.twitter || 'N/A'}
+            - Description: ${data.description || 'N/A'}
+          `;
+          
+          // Generate deeper analysis using the agent
+          const analysisPrompt = `
+            As a crypto analyst focused on large-cap tokens, analyze this token data:
+            
+            ${marketSummary}
+            
+            Provide an in-depth analysis with:
+            1. Key observations about price action and volume patterns
+            2. Market sentiment interpretation (based on price, volume, and buy/sell activity)
+            3. Potential causes for current price movement
+            4. Short-term price outlook (next 24-48 hours)
+            5. Macro-context and relation to the broader market
+            
+            Focus on data-driven insights rather than speculation.
+          `;
+          
+          // Generate analysis
+          const analysisResult = await this.autonomousAgent.runOperation<{ response: string }>(analysisPrompt);
+          
+          // Store the analysis in memory
+          await this.memory.addNote({
+            title: `Large-Cap Analysis: ${token}`,
+            content: `
+              ${marketSummary}
+              
+              Analysis Summary:
+              ${analysisResult.response}
+            `,
+            category: 'largecap_analysis',
+            tags: ['crypto', 'largecap', token, 'analysis'],
+            timestamp: Date.now()
+          });
+          
+          logger.info(`Saved large-cap analysis for ${token} to memory`);
+        } catch (tokenError) {
+          logger.error(`Error analyzing large-cap token ${token}`, tokenError);
+        }
+      }
+    } catch (error) {
+      logger.error('Error executing large-cap analysis task', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Execute a large-cap token tweet task
+   * 
+   * @param task - Large-cap tweet task
+   */
+  private async executeLargeCapTweetTask(task: any): Promise<void> {
+    logger.info(`Executing large-cap token tweet task: ${task.description}`);
+    
+    try {
+      // Get recent large-cap analyses from memory
+      const recentAnalyses = await this.memory.searchNotes({
+        query: "large-cap analysis",
+        category: "largecap_analysis",
+        limit: 3
+      });
+      
+      if (recentAnalyses.length === 0) {
+        logger.warn('No large-cap analyses found, skipping tweet');
+        return;
+      }
+      
+      // Select one analysis to tweet about
+      const analysis = recentAnalyses[0];
+      
+      // Extract token symbol from the title
+      const tokenMatch = analysis.title.match(/Analysis: ([A-Z0-9]+)/);
+      if (!tokenMatch || !tokenMatch[1]) {
+        logger.warn('Could not extract token symbol from analysis title');
+        return;
+      }
+      
+      const tokenSymbol = tokenMatch[1];
+      
+      // Generate tweet
+      const tweetPrompt = `
+        As a respected crypto analyst, create an insightful tweet about ${tokenSymbol} based on this analysis:
+        
+        ${analysis.content.substring(0, 800)}...
+        
+        Your tweet should:
+        1. Present a clear, specific prediction or insight about ${tokenSymbol}
+        2. Reference key data metrics (price movement, volume, etc.)
+        3. Include your reasoning/justification
+        4. Use a confident but measured tone
+        5. Be concise (under 240 chars)
+        6. Use $${tokenSymbol} format
+        7. NOT include hashtags
+        
+        Only return the tweet text.
+      `;
+      
+      const tweetResult = await this.baseAgent.run({ task: tweetPrompt });
+      
+      // Post the tweet
+      try {
+        const tweetId = await this.twitterConnector.tweet(tweetResult.response);
+        logger.info(`Posted large-cap token tweet about ${tokenSymbol}`, { tweetId });
+      } catch (error) {
+        logger.error(`Error posting large-cap token tweet for ${tokenSymbol}`, error);
+      }
+    } catch (error) {
+      logger.error(`Error executing large-cap tweet task: ${task.description}`, error);
+      throw error;
     }
   }
   
@@ -1974,6 +2366,642 @@ The tweet should:
     }
     
     return symbols;
+  }
+  
+  /**
+   * Browse and engage with the Twitter timeline
+   * 
+   * @param task - The browse timeline task
+   */
+  private async executeBrowseTimelineTask(task: any): Promise<void> {
+    logger.info(`Executing browse timeline task: ${task.description}`);
+    
+    try {
+      // First, ensure we're following some crypto accounts if this is our first run
+      await this.ensureFollowingCryptoAccounts();
+      
+      // Get tweets from the home timeline
+      let timelineTweets = await this.twitterConnector.getHomeTimeline(20);
+      logger.info(`Retrieved ${timelineTweets.length} tweets from home timeline`);
+      
+      // If timeline is empty, fall back to search for crypto content
+      if (timelineTweets.length === 0) {
+        logger.warn('No tweets found in timeline, falling back to search for crypto content');
+        
+        // List of crypto search terms to use when timeline is empty
+        const fallbackSearchTerms = ['crypto', 'bitcoin', 'ethereum', 'blockchain', 'web3', 'defi'];
+        
+        // Use 2 random terms for variety
+        const searchTerms = fallbackSearchTerms
+          .sort(() => 0.5 - Math.random())
+          .slice(0, 2);
+        
+        // Search for each term and combine results
+        timelineTweets = [];
+        for (const term of searchTerms) {
+          try {
+            const results = await this.twitterConnector.searchTweets(term, 10);
+            logger.info(`Found ${results.length} tweets for search term: ${term}`);
+            timelineTweets = [...timelineTweets, ...results];
+          } catch (searchError) {
+            logger.error(`Error searching for ${term}`, searchError);
+          }
+        }
+        
+        logger.info(`Retrieved ${timelineTweets.length} tweets from search fallback`);
+      }
+      
+      // If we still have no tweets, we can't continue
+      if (timelineTweets.length === 0) {
+        logger.warn('No tweets found in timeline or search fallback');
+        return;
+      }
+      
+      // Filter tweets related to crypto and blockchain
+      const cryptoRelatedTweets = timelineTweets.filter(tweet => {
+        const text = tweet.text.toLowerCase();
+        const isRelevant = this.settings.focusAreas.some(area => 
+          text.includes(area.toLowerCase())
+        );
+        
+        // Check for token symbols using $ prefix
+        const hasCryptoSymbol = text.match(/\$[A-Z0-9]{2,}/);
+        
+        // Common crypto terms
+        const hasCryptoTerms = [
+          'blockchain', 'token', 'crypto', 'defi', 'nft', 'web3', 'bitcoin', 'ethereum',
+          'altcoin', 'btc', 'eth', 'sol', 'trading', 'market', 'chain'
+        ].some(term => text.includes(term));
+        
+        return isRelevant || !!hasCryptoSymbol || hasCryptoTerms;
+      });
+      
+      logger.info(`Found ${cryptoRelatedTweets.length} crypto-related tweets in collection`);
+      
+      // If no crypto tweets found after filtering, use all tweets but limit interactions
+      const tweetsToProcess = cryptoRelatedTweets.length > 0 ? 
+                              cryptoRelatedTweets : 
+                              timelineTweets.slice(0, 5); // Only use first 5 if not crypto-specific
+      
+      // Track seen tweets to avoid duplicate interactions
+      const interactedTweetIds = new Set<string>();
+      
+      // Set a limit on interactions per session to avoid appearing spammy
+      const maxInteractions = 5;
+      let interactionCount = 0;
+      
+      // Process the filtered tweets
+      for (const tweet of tweetsToProcess) {
+        // Skip processing if we've reached our interaction limit
+        if (interactionCount >= maxInteractions) break;
+        
+        // Skip if no tweet ID
+        if (!tweet.id) continue;
+        
+        // Skip our own tweets
+        const myUsername = process.env.TWITTER_USERNAME;
+        if (tweet.author.username?.toLowerCase() === myUsername?.toLowerCase()) continue;
+        
+        // Skip if we've already interacted with this tweet
+        if (interactedTweetIds.has(tweet.id)) continue;
+        
+        try {
+          // Analyze the tweet content with our agent
+          const analysis = await this.baseAgent.run({
+            task: `Analyze this tweet:
+            
+Tweet from @${tweet.author.username}: "${tweet.text}"
+
+Key points to consider:
+1. Is this valuable content about crypto/blockchain?
+2. Is the information accurate and thoughtful?
+3. Is this something our followers would benefit from seeing?
+4. How should we engage with this content?
+
+Respond with ONE of these options only:
+- "LIKE" - If the content is good but doesn't need more engagement
+- "RETWEET" - If the content is excellent and worth sharing with followers
+- "QUOTE: [your text]" - If you want to retweet with a comment (keep under 240 chars)
+- "REPLY: [your text]" - If you want to reply to the tweet (keep under 240 chars)
+- "IGNORE" - If the content is not relevant, low quality, or potentially harmful
+
+Your analysis should be based on the tweet's quality, accuracy, and relevance to our focus on crypto markets.`
+          });
+          
+          // Extract the decision from the response
+          const response = analysis.response.trim();
+          
+          if (response.startsWith('LIKE')) {
+            await this.twitterConnector.like(tweet.id);
+            logger.info(`Liked tweet from @${tweet.author.username}`);
+            interactedTweetIds.add(tweet.id);
+            interactionCount++;
+            
+            // If we like the tweet, also follow the user occasionally (20% chance)
+            if (Math.random() < 0.2 && tweet.author.username) {
+              try {
+                await this.twitterConnector.follow(tweet.author.username);
+                logger.info(`Followed user @${tweet.author.username} after liking their tweet`);
+              } catch (followError) {
+                logger.debug(`Error following user @${tweet.author.username}`, followError);
+              }
+            }
+          } 
+          else if (response.startsWith('RETWEET')) {
+            await this.twitterConnector.retweet(tweet.id);
+            logger.info(`Retweeted tweet from @${tweet.author.username}`);
+            interactedTweetIds.add(tweet.id);
+            interactionCount++;
+          } 
+          else if (response.startsWith('QUOTE:')) {
+            const quoteText = response.substring(6).trim();
+            await this.twitterConnector.quoteTweet(tweet.id, quoteText);
+            logger.info(`Quote tweeted @${tweet.author.username}`);
+            interactedTweetIds.add(tweet.id);
+            interactionCount++;
+          } 
+          else if (response.startsWith('REPLY:')) {
+            const replyText = response.substring(6).trim();
+            await this.twitterConnector.tweet(replyText, { replyTo: tweet.id });
+            logger.info(`Replied to tweet from @${tweet.author.username}`);
+            interactedTweetIds.add(tweet.id);
+            interactionCount++;
+          }
+          else {
+            logger.debug(`Ignoring tweet from @${tweet.author.username}`);
+          }
+          
+          // Add a small delay to avoid Twitter rate limits
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          
+        } catch (error) {
+          logger.error(`Error processing tweet from @${tweet.author.username}`, error);
+        }
+      }
+      
+      logger.info(`Completed timeline browsing with ${interactionCount} interactions`);
+    } catch (error) {
+      logger.error('Error executing browse timeline task', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Ensure the bot is following some key crypto accounts
+   * This helps populate the timeline and engage with the community
+   */
+  private async ensureFollowingCryptoAccounts(): Promise<void> {
+    try {
+      // List of important crypto accounts that provide good content
+      const cryptoAccounts = [
+        'cz_binance',       // Binance CEO
+        'SBF_FTX',          // FTX founder
+        'VitalikButerin',   // Ethereum co-founder
+        'CoinDesk',         // Crypto news
+        'binance',          // Binance exchange
+        'coinbase',         // Coinbase exchange
+        'krakenfx',         // Kraken exchange
+        'solana',           // Solana
+        'ethereum',         // Ethereum
+        'BitcoinMagazine',  // Bitcoin Magazine
+        'Cointelegraph',    // Crypto news
+        'CoinMarketCap',    // Market data
+        'defipulse',        // DeFi ecosystem
+        'MessariCrypto',    // Crypto research
+        'DefiDegen'         // DeFi commentator
+      ];
+      
+      // Check if we've already stored followed accounts in memory
+      const followedAccountsNote = await this.memory.searchNotes({
+        query: "followed crypto accounts",
+        category: "twitter_activity",
+        limit: 1
+      });
+      
+      if (followedAccountsNote.length > 0) {
+        logger.info('Already following crypto accounts from previous runs');
+        return;
+      }
+      
+      // Randomly select 3-5 accounts to follow (avoid following too many at once)
+      const shuffledAccounts = cryptoAccounts.sort(() => 0.5 - Math.random());
+      const accountsToFollow = shuffledAccounts.slice(0, Math.floor(Math.random() * 3) + 3);
+      
+      logger.info(`Following ${accountsToFollow.length} crypto accounts to populate timeline`);
+      
+      // Follow each account
+      const followedAccounts = [];
+      for (const account of accountsToFollow) {
+        if (!account) continue; // Skip any undefined accounts
+        
+        try {
+          await this.twitterConnector.follow(account);
+          logger.info(`Followed crypto account: @${account}`);
+          followedAccounts.push(account);
+          
+          // Add a delay between follows to avoid rate limits
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        } catch (error) {
+          logger.error(`Error following account @${account}`, error);
+        }
+      }
+      
+      // Store the followed accounts in memory
+      if (followedAccounts.length > 0) {
+        await this.memory.addNote({
+          title: `Followed ${followedAccounts.length} crypto accounts`,
+          content: `Followed these crypto accounts to populate timeline:\n${followedAccounts.join(', ')}`,
+          category: 'twitter_activity',
+          tags: ['twitter', 'follow', 'accounts'],
+          timestamp: Date.now()
+        });
+        
+        logger.info(`Stored followed accounts in memory`);
+      }
+    } catch (error) {
+      logger.error('Error ensuring crypto accounts are followed', error);
+    }
+  }
+  
+  /**
+   * Explore trending crypto topics on Twitter
+   * 
+   * @param task - The explore topics task
+   */
+  private async executeExploreTopicsTask(task: any): Promise<void> {
+    logger.info(`Executing explore topics task: ${task.description}`);
+    
+    try {
+      // Get trending topics
+      const trends = await this.twitterConnector.getTrends();
+      logger.info(`Retrieved ${trends.length} trending topics`);
+      
+      // Crypto-specific search terms
+      const cryptoSearchTerms = [
+        'bitcoin', 'ethereum', 'crypto', 'blockchain', 'web3', 
+        'defi', 'nft', 'altcoin', 'token', 'solana', 'btc', 'eth'
+      ];
+      
+      // Random selection of terms to search for variety
+      const selectedTerms = cryptoSearchTerms
+        .sort(() => 0.5 - Math.random())
+        .slice(0, 3);
+      
+      // Filter for crypto-related trends
+      const cryptoTrends = trends.filter(trend => {
+        const trendName = (trend.name || trend.query || '').toLowerCase();
+        return cryptoSearchTerms.some(term => trendName.includes(term));
+      }).slice(0, 3);
+      
+      // Combine trending topics with our search terms
+      const topicsToExplore = [
+        ...cryptoTrends.map(trend => trend.name || trend.query || ''),
+        ...selectedTerms
+      ];
+      
+      logger.info(`Selected ${topicsToExplore.length} topics to explore: ${topicsToExplore.join(', ')}`);
+      
+      // Max number of tweets to engage with per topic
+      const maxTweetsPerTopic = 2;
+      
+      // Track interacted tweets to avoid duplicates
+      const interactedTweetIds = new Set<string>();
+      
+      // Explore each topic
+      for (const topic of topicsToExplore) {
+        try {
+          logger.info(`Searching for tweets about: ${topic}`);
+          
+          // Search for recent tweets on this topic
+          const tweets = await this.twitterConnector.searchTweets(topic, 5);
+          
+          logger.info(`Found ${tweets.length} tweets about ${topic}`);
+          
+          // Filter out tweets from ourselves
+          const myUsername = process.env.TWITTER_USERNAME;
+          const validTweets = tweets.filter(t => 
+            t.author.username?.toLowerCase() !== myUsername?.toLowerCase()
+          );
+          
+          let interactionCount = 0;
+          
+          // Analyze and engage with each tweet
+          for (const tweet of validTweets) {
+            // Skip if we've reached interaction limit for this topic
+            if (interactionCount >= maxTweetsPerTopic) break;
+            
+            // Skip if no ID or we've already interacted
+            if (!tweet.id || interactedTweetIds.has(tweet.id)) continue;
+            
+            try {
+              // Analyze the tweet
+              const analysis = await this.baseAgent.run({
+                task: `Analyze this tweet about ${topic}:
+                
+Tweet from @${tweet.author.username}: "${tweet.text}"
+
+Key points to consider:
+1. Is this high-quality content about ${topic}?
+2. Is the information accurate and thoughtful?
+3. Is this something our followers would benefit from seeing?
+4. How should we engage to add value to the conversation?
+
+Respond with ONE of these options only:
+- "LIKE" - If the content is good but doesn't need more engagement
+- "RETWEET" - If the content is excellent and worth sharing with followers
+- "QUOTE: [your text]" - If you want to retweet with a comment (keep under 240 chars)
+- "REPLY: [your text]" - If you want to reply to the tweet (keep under 240 chars)
+- "IGNORE" - If the content is not relevant, low quality, or potentially harmful
+
+Your analysis should be based on the tweet's quality, accuracy, and relevance to our crypto analysis focus.`
+              });
+              
+              // Extract the decision from the response
+              const response = analysis.response.trim();
+              
+              if (response.startsWith('LIKE')) {
+                await this.twitterConnector.like(tweet.id);
+                logger.info(`Liked tweet about ${topic} from @${tweet.author.username}`);
+                interactedTweetIds.add(tweet.id);
+                interactionCount++;
+              } 
+              else if (response.startsWith('RETWEET')) {
+                await this.twitterConnector.retweet(tweet.id);
+                logger.info(`Retweeted tweet about ${topic} from @${tweet.author.username}`);
+                interactedTweetIds.add(tweet.id);
+                interactionCount++;
+              } 
+              else if (response.startsWith('QUOTE:')) {
+                const quoteText = response.substring(6).trim();
+                await this.twitterConnector.quoteTweet(tweet.id, quoteText);
+                logger.info(`Quote tweeted about ${topic} from @${tweet.author.username}`);
+                interactedTweetIds.add(tweet.id);
+                interactionCount++;
+              } 
+              else if (response.startsWith('REPLY:')) {
+                const replyText = response.substring(6).trim();
+                await this.twitterConnector.tweet(replyText, { replyTo: tweet.id });
+                logger.info(`Replied to tweet about ${topic} from @${tweet.author.username}`);
+                interactedTweetIds.add(tweet.id);
+                interactionCount++;
+              }
+              else {
+                logger.debug(`Ignoring tweet about ${topic} from @${tweet.author.username}`);
+              }
+              
+              // Add a small delay to avoid Twitter rate limits
+              await new Promise(resolve => setTimeout(resolve, 2000));
+              
+            } catch (error) {
+              logger.error(`Error processing tweet about ${topic} from @${tweet.author.username}`, error);
+            }
+          }
+          
+          logger.info(`Completed exploration of topic ${topic} with ${interactionCount} interactions`);
+          
+        } catch (error) {
+          logger.error(`Error exploring topic: ${topic}`, error);
+        }
+      }
+      
+      logger.info('Successfully completed topic exploration task');
+      
+    } catch (error) {
+      logger.error('Error executing explore topics task', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Browse and engage with Twitter timeline
+   * Helper method for follow-up tasks
+   */
+  private async browseAndEngageWithTimeline(): Promise<void> {
+    try {
+      logger.info('Browsing Twitter timeline for relevant content');
+      
+      // Get tweets from the home timeline
+      let timelineTweets = await this.twitterConnector.getHomeTimeline(10);
+      logger.info(`Retrieved ${timelineTweets.length} tweets from home timeline`);
+      
+      // If timeline is empty, fall back to search
+      if (timelineTweets.length === 0) {
+        logger.warn('No tweets found in timeline, using search fallback for follow-up task');
+        
+        // Use a random crypto term for search
+        const searchTerm = ['crypto', 'bitcoin', 'ethereum', 'defi'][Math.floor(Math.random() * 4)];
+        try {
+          timelineTweets = await this.twitterConnector.searchTweets(searchTerm, 10);
+          logger.info(`Found ${timelineTweets.length} tweets for search term: ${searchTerm}`);
+        } catch (searchError) {
+          logger.error(`Error searching for ${searchTerm}`, searchError);
+        }
+      }
+      
+      if (timelineTweets.length === 0) {
+        logger.warn('No tweets found in timeline or search fallback');
+        return;
+      }
+      
+      // Filter tweets related to crypto and blockchain
+      const cryptoRelatedTweets = timelineTweets.filter(tweet => {
+        const text = tweet.text.toLowerCase();
+        const isRelevant = this.settings.focusAreas.some(area => 
+          text.includes(area.toLowerCase())
+        );
+        
+        // Check for token symbols using $ prefix
+        const hasCryptoSymbol = text.match(/\$[A-Z0-9]{2,}/);
+        
+        // Common crypto terms
+        const hasCryptoTerms = [
+          'blockchain', 'token', 'crypto', 'defi', 'nft', 'web3', 'bitcoin', 'ethereum',
+          'altcoin', 'btc', 'eth', 'sol', 'trading', 'market', 'chain'
+        ].some(term => text.includes(term));
+        
+        return isRelevant || !!hasCryptoSymbol || hasCryptoTerms;
+      });
+      
+      logger.info(`Found ${cryptoRelatedTweets.length} crypto-related tweets in collection`);
+      
+      // Use all tweets but limit interactions if no crypto tweets found
+      const tweetsToProcess = cryptoRelatedTweets.length > 0 ? 
+                             cryptoRelatedTweets : 
+                             timelineTweets.slice(0, 3);
+      
+      // Set a limit on interactions during follow-up (fewer than in the dedicated task)
+      const maxInteractions = 3;
+      let interactionCount = 0;
+      
+      // Process the filtered tweets
+      for (const tweet of tweetsToProcess) {
+        // Skip processing if we've reached our interaction limit
+        if (interactionCount >= maxInteractions) break;
+        
+        // Skip if no tweet ID
+        if (!tweet.id) continue;
+        
+        // Skip our own tweets
+        const myUsername = process.env.TWITTER_USERNAME;
+        if (tweet.author.username?.toLowerCase() === myUsername?.toLowerCase()) continue;
+        
+        try {
+          // For follow-up tasks, we'll mostly just like relevant content
+          // Check if content is worth liking
+          const analysis = await this.baseAgent.run({
+            task: `Analyze this tweet:
+            
+Tweet from @${tweet.author.username}: "${tweet.text}"
+
+Is this tweet worth liking based on relevance to crypto markets and quality of information?
+Answer with either "LIKE" or "IGNORE".`
+          });
+          
+          // Extract the decision
+          const response = analysis.response.trim();
+          
+          if (response.includes('LIKE')) {
+            await this.twitterConnector.like(tweet.id);
+            logger.info(`Liked timeline tweet from @${tweet.author.username}`);
+            interactionCount++;
+            
+            // Occasionally follow user (10% chance during follow-up task)
+            if (Math.random() < 0.1 && tweet.author.username) {
+              try {
+                await this.twitterConnector.follow(tweet.author.username);
+                logger.info(`Followed user @${tweet.author.username} during follow-up task`);
+              } catch (followError) {
+                logger.debug(`Error following user @${tweet.author.username}`, followError);
+              }
+            }
+          } else {
+            logger.debug(`Ignoring timeline tweet from @${tweet.author.username}`);
+          }
+          
+          // Add a small delay between processing tweets
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+        } catch (error) {
+          logger.error(`Error processing timeline tweet from @${tweet.author.username}`, error);
+        }
+      }
+      
+      logger.info(`Completed timeline browsing with ${interactionCount} interactions`);
+    } catch (error) {
+      logger.error('Error browsing timeline', error);
+    }
+  }
+  
+  /**
+   * Browse trending crypto topics
+   * Helper method for follow-up tasks
+   */
+  private async exploreTrendingTopics(): Promise<void> {
+    try {
+      logger.info('Exploring trending crypto topics');
+      
+      // Try to get trending topics
+      const trends = await this.twitterConnector.getTrends();
+      logger.info(`Retrieved ${trends.length} trending topics`);
+      
+      // Look for crypto-related trends
+      const cryptoTrends = trends.filter(trend => {
+        const trendName = (trend.name || trend.query || '').toLowerCase();
+        return ['crypto', 'bitcoin', 'ethereum', 'blockchain', 'web3', 'defi', 'nft', 'token']
+          .some(term => trendName.includes(term));
+      });
+      
+      logger.info(`Found ${cryptoTrends.length} crypto-related trends`);
+      
+      // Select search term - either crypto trend or fallback
+      let searchTerm: string;
+      
+      if (cryptoTrends.length > 0) {
+        // Use a trending crypto topic
+        const selectedTrend = cryptoTrends[Math.floor(Math.random() * cryptoTrends.length)];
+        searchTerm = selectedTrend.name || selectedTrend.query || 'crypto';
+        logger.info(`Selected trending crypto topic: ${searchTerm}`);
+      } else {
+        // Fallback to standard crypto terms
+        searchTerm = ['bitcoin', 'ethereum', 'crypto', 'blockchain', 'web3', 'defi']
+          .sort(() => 0.5 - Math.random())[0]; // Randomly select one term
+        logger.info(`No crypto trends found, using fallback term: ${searchTerm}`);
+      }
+      
+      logger.info(`Searching for tweets about: ${searchTerm}`);
+      
+      // Search for recent tweets on this topic
+      const tweets = await this.twitterConnector.searchTweets(searchTerm, 5);
+      
+      logger.info(`Found ${tweets.length} tweets about ${searchTerm}`);
+      
+      // Filter out tweets from ourselves
+      const myUsername = process.env.TWITTER_USERNAME;
+      const validTweets = tweets.filter(t => 
+        t.author.username?.toLowerCase() !== myUsername?.toLowerCase()
+      );
+      
+      // Limit interactions during follow-up
+      const maxInteractions = 2;
+      let interactionCount = 0;
+      
+      // Process tweets
+      for (const tweet of validTweets) {
+        // Skip if we've reached interaction limit
+        if (interactionCount >= maxInteractions) break;
+        
+        // Skip if no ID
+        if (!tweet.id) continue;
+        
+        try {
+          // More detailed analysis for trending topics
+          const analysis = await this.baseAgent.run({
+            task: `Analyze this tweet about ${searchTerm}:
+            
+Tweet from @${tweet.author.username}: "${tweet.text}"
+
+How should we engage with this content?
+Choose ONE option: "LIKE", "RETWEET", or "IGNORE".`
+          });
+          
+          // Extract decision
+          const response = analysis.response.trim().toUpperCase();
+          
+          if (response.includes('LIKE')) {
+            await this.twitterConnector.like(tweet.id);
+            logger.info(`Liked tweet about ${searchTerm} from @${tweet.author.username}`);
+            interactionCount++;
+            
+            // Occasionally follow users who post about trending topics (15% chance)
+            if (Math.random() < 0.15 && tweet.author.username) {
+              try {
+                await this.twitterConnector.follow(tweet.author.username);
+                logger.info(`Followed user @${tweet.author.username} who posts about trending topics`);
+              } catch (followError) {
+                logger.debug(`Error following user @${tweet.author.username}`, followError);
+              }
+            }
+          } else if (response.includes('RETWEET')) {
+            await this.twitterConnector.retweet(tweet.id);
+            logger.info(`Retweeted content about ${searchTerm} from @${tweet.author.username}`);
+            interactionCount++;
+          } else {
+            logger.debug(`Ignoring tweet about ${searchTerm} from @${tweet.author.username}`);
+          }
+          
+          // Add a small delay
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+        } catch (error) {
+          logger.error(`Error processing tweet about ${searchTerm} from @${tweet.author.username}`, error);
+        }
+      }
+      
+      logger.info(`Completed trending topic exploration with ${interactionCount} interactions`);
+      
+    } catch (error) {
+      logger.error('Error exploring trending topics', error);
+    }
   }
   
   /**
