@@ -46,3 +46,9 @@ data/
 .json
 agent-twitter.md
 roadmap.md
+
+# Ignore the examples folder
+/examples/
+
+# But include the crypto-twitter-direct.ts file
+!/examples/crypto-twitter-direct.ts
