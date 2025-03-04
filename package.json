@@ -28,7 +28,10 @@
     "crypto-twitter": "ts-node -r tsconfig-paths/register examples/crypto-twitter-direct-agent.ts",
     "twitter": "ts-node -r tsconfig-paths/register examples/twitter-direct-bot.ts",
     "twitter-bot": "ts-node -r tsconfig-paths/register examples/twitter-direct-bot.ts",
-    "twitter-trends": "ts-node -r tsconfig-paths/register -e \"require('./examples/twitter-direct-bot').getTrends()\""
+    "twitter-trends": "ts-node -r tsconfig-paths/register -e \"require('./examples/twitter-direct-bot').getTrends()\"",
+    "discord": "ts-node -r tsconfig-paths/register examples/discord-bot-simple.ts",
+    "discord-bot": "ts-node -r tsconfig-paths/register examples/discord-bot-simple.ts",
+    "discord-swarm": "ts-node -r tsconfig-paths/register examples/discord-agent-swarm.ts"
   },
   "keywords": [
     "ai",
@@ -48,6 +51,7 @@
     "@types/node": "^22.13.5",
     "agent-twitter-client": "^0.0.18",
     "axios": "^1.8.1",
+    "discord.js": "^14.18.0",
     "dotenv": "^16.4.7",
     "openai": "^4.85.4",
     "puppeteer": "^24.3.0",
