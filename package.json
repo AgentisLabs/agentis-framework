@@ -31,6 +31,7 @@
     "twitter-trends": "ts-node -r tsconfig-paths/register -e \"require('./examples/twitter-direct-bot').getTrends()\"",
     "discord": "ts-node -r tsconfig-paths/register examples/discord-bot-simple.ts",
     "discord-bot": "ts-node -r tsconfig-paths/register examples/discord-bot-simple.ts",
+    "discord-researcher": "ts-node -r tsconfig-paths/register examples/discord-researcher-bot.ts",
     "discord-swarm": "ts-node -r tsconfig-paths/register examples/discord-agent-swarm.ts"
   },
   "keywords": [
