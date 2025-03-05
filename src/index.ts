@@ -4,6 +4,7 @@
 // Core components
 export { Agent } from './core/agent';
 export { AgentSwarm } from './core/agent-swarm';
+export { AutonomousAgent, AutonomousAgentConfig } from './core/autonomous-agent';
 export { 
   AgentRole, 
   AgentEvent 
@@ -59,12 +60,21 @@ export {
 } from './planning/planner-interface';
 export { DefaultPlanner } from './planning/default-planner';
 export { EnhancedPlanner } from './planning/enhanced-planner';
+export { 
+  DependencyInference, 
+  DependencyInferenceConfig,
+  DependencyGraph,
+  TaskInfoFlow 
+} from './planning/dependency-inference';
 
 // Tools
 export { ToolRegistry } from './tools/tool-registry';
 export { WebSearchTool } from './tools/web-search-tool';
 export { TavilySearchTool } from './tools/tavily-search-tool';
 export { WeatherTool } from './tools/weather-tool';
+export { CoinGeckoPriceTool } from './tools/coingecko-price-tool';
+export { BirdEyeTokenOverviewTool } from './tools/birdeye-token-overview-tool';
+export { BirdEyeTrendingTool } from './tools/birdeye-trending-tool';
 
 // Platform Connectors
 export { 

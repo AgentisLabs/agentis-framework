@@ -278,8 +278,9 @@ export class TwitterConnector extends EventEmitter {
       // Clear the field and type username
       await this.page.evaluate(() => {
         const inputs = document.querySelectorAll('input[type="text"]');
-        for (const input of inputs) {
-          (input as HTMLInputElement).value = '';
+        for (let i = 0; i < inputs.length; i++) {
+          const input = inputs[i] as HTMLInputElement;
+          input.value = '';
         }
       });
       
