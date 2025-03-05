@@ -1,6 +1,6 @@
 # Agentis Framework
 
-Agentis Framework is a powerful toolkit for building autonomous AI agents with advanced capabilities like memory, planning, tool usage, task decomposition, goal-based reasoning, and pre-builtplatform integrations.
+Agentis Framework is a powerful toolkit for building autonomous AI agents with advanced capabilities like memory, planning, tool usage, task decomposition, goal-based reasoning, and pre-built platform integrations.
 
 ## Features
 
@@ -22,40 +22,36 @@ npm install agentis-framework
 
 ## Quick Start
 
-### Try the Showcase
+### Try the Example
 
-The easiest way to explore Agentis capabilities is to run our interactive showcase:
+The easiest way to explore Agentis capabilities is to run our included example - a Discord-based crypto research agent with web search and market data tools:
 
 ```bash
+# Clone the repository
+git clone https://github.com/agentislabs/agentis-framework.git
+cd agentis-framework
+
 # Install dependencies
 npm install
 
-# Run the interactive showcase (demonstrates all features)
-npm run showcase
+# Set up environment variables (.env file)
+# You'll need:
+# - OPENAI_API_KEY for GPT-4 access
+# - BOT_TOKEN for Discord bot authentication
+# - PINECONE_API_KEY for vector memory storage
+# - TAVILY_API_KEY for web search capabilities (optional)
 
-# Try the simple chat agent with Claude
-npm run chat
-
-# Try the agent with OpenAI
-npm run openai
-
-# Try a multi-provider swarm with specialized agents
-npm run multi-provider
-
-# Run the enhanced multi-provider swarm
-npm run enhanced-swarm
-
-# Try the dependency inference demo
-npm run dependency-demo
+# Run the Discord Crypto Researcher example
+npm run example
 ```
 
-The showcase demonstrates:
-- Enhanced memory with semantic search
-- Hierarchical planning and execution
-- Tool usage for web search
-- Streaming responses in real-time
-- Multi-provider agent collaboration
-- Advanced task dependency inference
+This example demonstrates:
+- Advanced memory with vector-based semantic search
+- Multi-tool integration (web search, pricing data, market trends)
+- Discord platform integration
+- Persistent memory storage
+- Specialized agent persona with expert domain knowledge
+- Real-time crypto market data analysis
 
 ### Basic Usage
 
