@@ -1,3 +1,5 @@
+# This file is for users who want to use an ai powered IDE to develop with the Agentis Framework, it acts as a guide to help Claude understand the codebase and assist with development tasks.
+
 # Agentis Framework
 
 This file contains helpful information about the Agentis framework codebase to assist Claude in development tasks.

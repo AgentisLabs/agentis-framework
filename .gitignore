@@ -47,6 +47,12 @@ examples/
 # Exclude crypto agent files
 examples/crypto-twitter-direct-agent.ts
 examples/*crypto*.ts
+examples/discord-bot-simple.ts
+examples/discord-bot.ts
+examples/price-checker.ts
+examples/discord-researcher-bot.ts
+
+examples/crypto-price-checker.ts
 
 # Testing and development files
 test-*.js
@@ -57,6 +63,7 @@ agent-twitter.md
 roadmap.md
 tavily.md
 CLAUDE.md
+*.md
 
 
 
