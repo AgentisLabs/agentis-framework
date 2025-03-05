@@ -1,6 +1,6 @@
 # Agentis Framework
 
-Agentis Framework is a powerful toolkit for building autonomous AI agents with advanced capabilities like memory, planning, and platform integrations.
+Agentis Framework is a powerful toolkit for building autonomous AI agents with advanced capabilities like memory, planning, tool usage, task decomposition, goal-based reasoning, and pre-builtplatform integrations.
 
 ## Features
 
