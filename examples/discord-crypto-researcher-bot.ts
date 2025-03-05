@@ -5,6 +5,7 @@ import { TavilySearchTool } from '../src/tools/tavily-search-tool';
 import { WebSearchTool } from '../src/tools/web-search-tool';
 import { BirdEyeTrendingTool } from '../src/tools/birdeye-trending-tool';
 import { BirdEyeTokenOverviewTool } from '../src/tools/birdeye-token-overview-tool';
+import { CoinGeckoPriceTool } from '../src/tools/coingecko-price-tool';
 import { OpenAIProvider } from '../src/core/openai-provider';
 import { Logger } from '../src/utils/logger';
 import { PineconeStore } from '../src/memory/pinecone-store';
@@ -340,13 +341,39 @@ class VectorResearchMemory implements ResearchMemorySystem, MemoryInterface {
 class CryptoAnalyzer {
   private birdEyeTrendingTool: BirdEyeTrendingTool;
   private birdEyeTokenOverviewTool: BirdEyeTokenOverviewTool;
+  private coinGeckoPriceTool: CoinGeckoPriceTool;
   public tavilySearchTool: TavilySearchTool | null;
   private memory: VectorResearchMemory;
   private logger: Logger;
   
+  // Common token symbol to CoinGecko ID mapping
+  private tokenSymbolMap: Record<string, string> = {
+    'btc': 'bitcoin',
+    'eth': 'ethereum',
+    'sol': 'solana',
+    'doge': 'dogecoin',
+    'usdt': 'tether',
+    'usdc': 'usd-coin',
+    'xrp': 'ripple',
+    'ada': 'cardano',
+    'avax': 'avalanche-2',
+    'dot': 'polkadot',
+    'matic': 'polygon',
+    'shib': 'shiba-inu',
+    'link': 'chainlink',
+    'ltc': 'litecoin',
+    'uni': 'uniswap',
+    'atom': 'cosmos',
+    'bnb': 'binancecoin',
+    'trx': 'tron',
+    'dai': 'dai',
+    'aave': 'aave'
+  };
+  
   constructor(memory: VectorResearchMemory, tavilySearchTool: TavilySearchTool | null = null) {
     this.birdEyeTrendingTool = new BirdEyeTrendingTool();
     this.birdEyeTokenOverviewTool = new BirdEyeTokenOverviewTool();
+    this.coinGeckoPriceTool = new CoinGeckoPriceTool();
     this.memory = memory;
     this.logger = new Logger('CryptoAnalyzer');
     this.tavilySearchTool = null; // Initialize with null
@@ -376,6 +403,24 @@ class CryptoAnalyzer {
     } else {
       this.logger.error('CryptoAnalyzer initialized WITHOUT search tool - research will fail');
     }
+    
+    // Register CoinGecko price tool with registry
+    try {
+      const registry = ToolRegistry.getInstance();
+      registry.registerTool(this.coinGeckoPriceTool);
+      this.logger.info('Registered CoinGecko price tool with registry');
+    } catch (error) {
+      this.logger.warn('Error registering CoinGecko price tool', error);
+    }
+  }
+  
+  /**
+   * Maps a token symbol to its CoinGecko ID
+   * Falls back to using the symbol itself if no mapping exists
+   */
+  mapSymbolToCoingeckoId(symbol: string): string {
+    const normalizedSymbol = symbol.toLowerCase().replace(/[^a-z0-9]/g, '');
+    return this.tokenSymbolMap[normalizedSymbol] || normalizedSymbol;
   }
   
   async getTrendingTokens(limit: number = 10): Promise<any> {
@@ -404,6 +449,32 @@ class CryptoAnalyzer {
     }
   }
   
+  async getTokenPrice(tokenId: string): Promise<any> {
+    try {
+      this.logger.info(`Getting CoinGecko price data for token ID: ${tokenId}`);
+      
+      const priceResult = await this.coinGeckoPriceTool.execute({
+        tokenId: tokenId
+      });
+      
+      // Parse the JSON string result
+      let parsedResult;
+      try {
+        parsedResult = JSON.parse(priceResult);
+        this.logger.info(`Successfully got price data for ${tokenId}`);
+      } catch (parseError) {
+        // If it's an error message, it may not be valid JSON
+        this.logger.error(`Error parsing price data for ${tokenId}: ${priceResult}`);
+        return { error: priceResult };
+      }
+      
+      return parsedResult;
+    } catch (error) {
+      this.logger.error(`Error getting price data for ${tokenId}`, error);
+      throw error;
+    }
+  }
+  
   async analyzeToken(symbol: string, agent: Agent): Promise<string> {
     try {
       // First check if we already have analysis for this token
@@ -421,7 +492,8 @@ class CryptoAnalyzer {
       
       this.logger.info(`Search tool is available for token ${symbol} analysis`);
       
-      // Try to get token data from BirdEye
+      // Try to get token data from multiple sources
+      // 1. First try BirdEye for detailed token data
       let tokenData;
       try {
         tokenData = await this.getTokenOverview(symbol);
@@ -429,6 +501,20 @@ class CryptoAnalyzer {
       } catch (error: any) {
         this.logger.warn(`Error getting token data from BirdEye: ${error?.message || 'Unknown error'}`);
         tokenData = null;
+      }
+      
+      // 2. Also get CoinGecko price data when available
+      let coingeckoData = null;
+      try {
+        // Try to get CoinGecko data regardless of BirdEye result
+        // Use lowercase and handle token symbol conversions for better match rate
+        const coingeckoId = this.mapSymbolToCoingeckoId(symbol.toLowerCase());
+        this.logger.info(`Attempting to get CoinGecko price data for ${coingeckoId}`);
+        coingeckoData = await this.getTokenPrice(coingeckoId);
+        this.logger.info(`Got CoinGecko price data: ${JSON.stringify(coingeckoData).substring(0, 100)}...`);
+      } catch (error) {
+        this.logger.warn(`Could not get CoinGecko price data for ${symbol}: ${error}`);
+        coingeckoData = null;
       }
       
       // If we couldn't get token data, do a general search
@@ -531,9 +617,23 @@ class CryptoAnalyzer {
       
       const data = tokenData.token;
       
-      // Format market metrics - more compact to reduce token usage
-      const marketSummary = `
+      // Combine BirdEye and CoinGecko data for more comprehensive analysis
+      // If we have CoinGecko data, use it to supplement BirdEye data
+      const cgPrice = coingeckoData && !coingeckoData.error ? coingeckoData : null;
+      
+      // Get additional search context - always helpful for thorough analysis
+      const searchContext = searchResults.answer ? 
+        `\nSearch Context:\n${searchResults.answer.substring(0, 500)}${searchResults.answer.length > 500 ? '...' : ''}` : '';
+      
+      // Format market metrics with both data sources when available - more compact to reduce token usage
+      let marketSummary = `
         Token: ${data.name} (${data.symbol})
+        `;
+        
+      // If we have BirdEye data, include it first
+      if (data) {
+        marketSummary += `
+        BirdEye Data:
         Current Price: $${data.price?.toFixed(6) || 'N/A'}
         24h Change: ${data.priceChange24h?.toFixed(2) || 'N/A'}%
         24h Volume: $${data.volume24hUSD ? (data.volume24hUSD / 1000000).toFixed(2) : 'N/A'} million
@@ -542,32 +642,83 @@ class CryptoAnalyzer {
         Holders: ${data.holders?.toLocaleString() || 'N/A'}
         Website: ${data.links?.website || 'N/A'}
         Twitter: ${data.links?.twitter || 'N/A'}
+        `;
+      }
+      
+      // If we have CoinGecko data, include it
+      if (cgPrice) {
+        // Format date for readability
+        const lastUpdatedDate = new Date(cgPrice.last_updated_at);
+        const formattedDate = lastUpdatedDate.toLocaleString();
         
+        // Format large numbers with appropriate suffixes
+        const formatLargeNumber = (num: number) => {
+          if (num >= 1_000_000_000) {
+            return `$${(num / 1_000_000_000).toFixed(2)}B`;
+          } else if (num >= 1_000_000) {
+            return `$${(num / 1_000_000).toFixed(2)}M`;
+          } else {
+            return `$${num.toLocaleString()}`;
+          }
+        };
+        
+        marketSummary += `
+        CoinGecko Data:
+        Price (USD): $${cgPrice.price_usd?.toLocaleString() || 'N/A'}
+        Market Cap: ${formatLargeNumber(cgPrice.market_cap_usd)}
+        24h Volume: ${formatLargeNumber(cgPrice.volume_24h_usd)}
+        24h Change: ${cgPrice.price_change_24h_percent >= 0 ? '▲' : '▼'} ${Math.abs(cgPrice.price_change_24h_percent).toFixed(2)}%
+        Last Updated: ${formattedDate}
+        `;
+      }
+      
+      // Add project description if available
+      if (data && data.description) {
+        marketSummary += `
         Project Description: 
-        ${data.description || 'No description available'}
+        ${data.description}
+        `;
+      }
+      
+      // Add search context
+      marketSummary += searchContext;
+      
+      // Add sources if available
+      if (sourcesList) {
+        marketSummary += `
         
-        Additional Context:
-        ${searchResults.answer || ''}
-        
-        ${sourcesList ? `Sources:\n${sourcesList}` : ''}
-      `;
+        Sources:
+        ${sourcesList}
+        `;
+      }
+      
+      this.logger.info(`Created market summary with BirdEye data: ${!!data}, CoinGecko data: ${!!cgPrice}, Search data: ${!!searchResults.answer}`);
+      
+      // Get current date
+      const currentDate = new Date();
+      const formattedDate = currentDate.toDateString();
       
       // Generate analysis with the agent
       this.logger.info(`Sending token analysis prompt with market data to agent`);
       const analysisPrompt = `
-        As a crypto analyst, analyze this token data:
+        Current date: ${formattedDate}
+        
+        As a crypto analyst in 2025, analyze this token data:
         
         ${marketSummary}
         
         Provide an in-depth analysis with:
         1. Key observations about the token's use case and value proposition
-        2. Market potential and adoption outlook
-        3. Technical strengths and concerns
-        4. Competition and market positioning
-        5. Risks and opportunities
-        6. Short-term and medium-term outlook
+        2. Current market conditions in 2025 for this token
+        3. Market potential and adoption outlook as of March 2025
+        4. Technical strengths and concerns based on current data
+        5. Competition and market positioning in the 2025 crypto landscape
+        6. Risks and opportunities relevant to the current market
+        7. Short-term (Q2 2025) and medium-term (EOY 2025) outlook
         
         Focus on data-driven insights rather than speculation.
+        IMPORTANT: Your analysis MUST reflect current market conditions as of ${formattedDate}, 2025.
+        When referencing prices or trends, clearly state they are from current 2025 data.
       `;
       
       // Generate the analysis
@@ -744,9 +895,13 @@ async function startDiscordBot() {
         CRYPTO ANALYSIS CAPABILITIES:
         - You can fetch trending tokens using BirdEye
         - You can analyze specific tokens and get detailed metrics
+        - You can get precise token price data from CoinGecko via the !price command
         - You can provide technical and fundamental analysis of crypto projects
         - You store token analyses in memory for future reference
 
+        CURRENT DATE AND TIME INFORMATION:
+        Today's date: March 5, 2025
+        
         IMPORTANT GUIDELINES:
         1. Stay in character as Wexley at all times
         2. Be direct, confident, and occasionally abrasive in your communication
@@ -758,11 +913,24 @@ async function startDiscordBot() {
         8. For crypto mentions, use the $ prefix format ($BTC, $ETH, etc.)
         9. You have access to real-time information via specialized tools - use it to provide accurate market data
         10. When discussing market trends or technology developments, use your tools to get current information
+        11. ALWAYS use the CoinGecko price tool when asked about token prices, even if not explicitly requested with !price
+        12. ALWAYS use search tools to get current information before providing analysis on crypto tokens or markets
+        13. When users ask for your perspective on a token, integrate both historical knowledge and current price data
+        14. CRITICAL: You MUST acknowledge the current date is 2025, and explicitly state that your analysis is for 2025, not past years
+        15. ALWAYS check and report the "Last Updated" timestamp when presenting price data to ensure you're using current information
+        16. NEVER reference outdated news, prices, or trends without explicitly stating they are historical references
+        17. When analyzing tokens, ALWAYS use MULTIPLE TOOLS together:
+           - CoinGecko price tool for current price, market cap, and price change data
+           - BirdEye token overview for detailed on-chain metrics
+           - Web search for latest news and developments
+           - Trending tools for market context
+        18. ALWAYS include specific price data and metrics in your analysis, not just general statements
 
         DISCORD COMMANDS:
         - !ask [question] - Answer a question using your knowledge
         - !research [topic] - Conduct in-depth research on a topic and provide analysis
         - !token [symbol] - Analyze a specific crypto token with latest data
+        - !price [tokenId] - Get current price data for a token via CoinGecko
         - !trending - List trending crypto tokens on Solana
         - !topics - List recent research topics you've investigated
         - !help - Show available commands
@@ -817,6 +985,15 @@ async function startDiscordBot() {
       logger.info('Registered BirdEye token overview tool with registry');
     } catch (error) {
       logger.warn('Error registering BirdEye token overview tool', error);
+    }
+    
+    // Register CoinGecko price tool
+    const coinGeckoPriceTool = new CoinGeckoPriceTool();
+    try {
+      registry.registerTool(coinGeckoPriceTool);
+      logger.info('Registered CoinGecko price tool with registry');
+    } catch (error) {
+      logger.warn('Error registering CoinGecko price tool', error);
     }
     
     // Set memory for the agent
@@ -876,6 +1053,7 @@ Use these commands:
 - **!ask** [question] - Answer a question using my knowledge
 - **!research** [topic] - Conduct in-depth research on a topic
 - **!token** [symbol] - Analyze a specific crypto token with latest data
+- **!price** [tokenId] - Get current price data for a token via CoinGecko (e.g., bitcoin, ethereum)
 - **!trending** - List trending crypto tokens on Solana
 - **!topics** - List topics I've researched
 - **!help** - Show available commands
@@ -959,6 +1137,11 @@ You can also just mention me with your question!`);
             await handleTokenCommand(message, args.join(' '), agent, cryptoAnalyzer);
             break;
             
+          case 'price':
+          case 'p':
+            await handlePriceCommand(message, args.join(' '), cryptoAnalyzer);
+            break;
+            
           case 'trending':
           case 'tr':
             await handleTrendingCommand(message, cryptoAnalyzer);
@@ -976,6 +1159,7 @@ You can also just mention me with your question!`);
 !ask [question] - Ask me a question using my knowledge
 !research [topic] - Conduct in-depth research on a topic and provide analysis
 !token [symbol] - Analyze a specific crypto token with latest data
+!price [tokenId] - Get current price data for a token via CoinGecko (e.g., bitcoin, ethereum, solana)
 !trending - List trending crypto tokens on Solana
 !topics - List topics I've recently researched
 !help - Show this help message
@@ -1019,7 +1203,7 @@ You can also mention me to ask a question without using the prefix.`
 }
 
 /**
- * Handle the ask command
+ * Handle the ask command with smart tool selection
  */
 async function handleAskCommand(message: any, question: string, agent: Agent): Promise<void> {
   if (!question) {
@@ -1033,9 +1217,185 @@ async function handleAskCommand(message: any, question: string, agent: Agent): P
   try {
     logger.info(`Running agent for question: "${question.substring(0, 100)}..."`);
     
-    // Run the agent to answer the question
+    // Get available tools from the registry
+    const registry = ToolRegistry.getInstance();
+    const availableTools = [];
+    
+    // Get search tool for general knowledge queries
+    const searchTool = registry.getTool('web_search');
+    if (searchTool) {
+      availableTools.push(searchTool);
+      logger.info('Added search tool to available tools for question');
+    }
+    
+    // Check if the question might be about crypto prices or token analysis
+    const lowercaseQuestion = question.toLowerCase();
+    const cryptoKeywords = ['bitcoin', 'btc', 'eth', 'ethereum', 'sol', 'solana', 'price', 'token', 
+                           'crypto', 'cryptocurrency', 'market cap', 'trading', 'blockchain', 
+                           'coin', 'market', 'volume', 'exchange', 'bull', 'bear', 'rally', 'dump',
+                           'trend', 'wallet', 'defi', 'nft', 'altcoin', 'stablecoin'];
+    
+    // Check if question contains crypto keywords
+    const containsCryptoKeywords = cryptoKeywords.some(keyword => 
+      lowercaseQuestion.includes(keyword) || 
+      // Also check for token symbols with $ prefix (like $BTC)
+      lowercaseQuestion.includes(`$${keyword}`)
+    );
+    
+    // Check for price-specific queries
+    const isPriceQuery = lowercaseQuestion.includes('price') || 
+                         lowercaseQuestion.includes('cost') ||
+                         lowercaseQuestion.includes('worth') ||
+                         lowercaseQuestion.includes('value') ||
+                         lowercaseQuestion.includes('trading at') ||
+                         lowercaseQuestion.includes('how much is') ||
+                         lowercaseQuestion.includes('market') ||
+                         lowercaseQuestion.includes('trading') ||
+                         lowercaseQuestion.includes('performance');
+    
+    // Check for token analysis or outlook queries
+    const isAnalysisOrOutlookQuery = lowercaseQuestion.includes('analysis') || 
+                          lowercaseQuestion.includes('analyze') ||
+                          lowercaseQuestion.includes('outlook') || 
+                          lowercaseQuestion.includes('sentiment') ||
+                          lowercaseQuestion.includes('bullish') ||
+                          lowercaseQuestion.includes('bearish') ||
+                          lowercaseQuestion.includes('fundamental') ||
+                          lowercaseQuestion.includes('technical') ||
+                          lowercaseQuestion.includes('perspective') ||
+                          lowercaseQuestion.includes('thoughts on') ||
+                          lowercaseQuestion.includes('opinion') ||
+                          lowercaseQuestion.includes('prediction') ||
+                          lowercaseQuestion.includes('forecast') ||
+                          lowercaseQuestion.includes('future') ||
+                          lowercaseQuestion.includes('potential') ||
+                          lowercaseQuestion.includes('opportunity') ||
+                          lowercaseQuestion.includes('risk') ||
+                          lowercaseQuestion.includes('assessment');
+    
+    // Detect specific tokens mentioned (especially in outlook questions)
+    const tokenMentions = {
+      'btc': lowercaseQuestion.includes('btc') || 
+             lowercaseQuestion.includes('bitcoin') ||
+             lowercaseQuestion.includes('$btc'),
+      'eth': lowercaseQuestion.includes('eth') || 
+             lowercaseQuestion.includes('ethereum') ||
+             lowercaseQuestion.includes('$eth'),
+      'sol': lowercaseQuestion.includes('sol') || 
+             lowercaseQuestion.includes('solana') ||
+             lowercaseQuestion.includes('$sol'),
+    };
+    
+    // Count number of token mentions for logging
+    const mentionedTokensCount = Object.values(tokenMentions).filter(Boolean).length;
+    if (mentionedTokensCount > 0) {
+      logger.info(`Detected ${mentionedTokensCount} specific token mentions in question`);
+    }
+    
+    // Add crypto-specific tools based on the question
+    if (containsCryptoKeywords) {
+      logger.info('Question contains crypto keywords, adding relevant tools');
+      
+      // Get all available crypto tools
+      const priceTool = registry.getTool('coingecko-price-tool');
+      const tokenOverviewTool = registry.getTool('birdeye-token-overview');
+      const trendingTool = registry.getTool('birdeye-trending');
+      
+      // For outlook and analysis queries, ALWAYS add both price and token overview tools
+      if (isAnalysisOrOutlookQuery && mentionedTokensCount > 0) {
+        logger.info('Question is about crypto outlook/analysis with specific tokens - using ALL relevant tools');
+        
+        // Always use price tool for outlook questions
+        if (priceTool) {
+          availableTools.push(priceTool);
+          logger.info('Added CoinGecko price tool for outlook/analysis query');
+        }
+        
+        // Always use token overview for outlook questions
+        if (tokenOverviewTool) {
+          availableTools.push(tokenOverviewTool);
+          logger.info('Added BirdEye token overview tool for outlook/analysis query');
+        }
+        
+        // Add trending tool for market context
+        if (trendingTool) {
+          availableTools.push(trendingTool);
+          logger.info('Added BirdEye trending tool for market context');
+        }
+      } else {
+        // For more general or price-only queries, be more selective
+        
+        // For price-specific queries, add CoinGecko price tool
+        if (priceTool && isPriceQuery) {
+          availableTools.push(priceTool);
+          logger.info('Added CoinGecko price tool for price-related query');
+        }
+        
+        // For token-analysis queries, add token overview tool
+        if (tokenOverviewTool && (isAnalysisOrOutlookQuery || isPriceQuery)) {
+          availableTools.push(tokenOverviewTool);
+          logger.info('Added BirdEye token overview tool for analysis-related query');
+        }
+        
+        // For trending queries, add trending tool
+        if (lowercaseQuestion.includes('trending') || 
+            lowercaseQuestion.includes('popular') || 
+            lowercaseQuestion.includes('hot')) {
+          if (trendingTool) {
+            availableTools.push(trendingTool);
+            logger.info('Added BirdEye trending tool for trending-related query');
+          }
+        }
+      }
+    }
+    
+    logger.info(`Using ${availableTools.length} tools to answer the question`);
+    
+    // Get current date and format it
+    const currentDate = new Date();
+    const formattedDate = currentDate.toDateString();
+    const formattedTime = currentDate.toTimeString().split(' ')[0];
+    
+    // Create a more detailed prompt for crypto outlook/analysis questions
+    let enhancedQuestion;
+    
+    if (containsCryptoKeywords && (isAnalysisOrOutlookQuery || isPriceQuery) && mentionedTokensCount > 0) {
+      // Enhanced prompt for crypto analysis with specific instruction to use multiple tools
+      enhancedQuestion = `
+Current date: ${formattedDate}
+Current time: ${formattedTime}
+
+IMPORTANT: Your analysis must reflect current market conditions as of ${formattedDate}, 2025.
+
+INSTRUCTIONS FOR CRYPTO ANALYSIS:
+1. First, use the CoinGecko price tool to get CURRENT price data, market cap, and 24h change
+2. Then, use the BirdEye token overview tool to get detailed on-chain metrics
+3. Next, use web search to find latest news and developments from 2025
+4. Optionally use trending data to provide market context
+5. Integrate ALL this information for a comprehensive analysis
+6. Include SPECIFIC NUMBERS from the tools in your response (prices, percentages, etc.)
+7. Make it clear your analysis is for 2025 market conditions
+
+User question: ${question}
+`;
+    } else {
+      // Standard enhanced question for other types of queries
+      enhancedQuestion = `
+Current date: ${formattedDate}
+Current time: ${formattedTime}
+
+IMPORTANT: Your analysis must reflect current market conditions as of ${formattedDate}, 2025.
+
+User question: ${question}
+`;
+    }
+    
+    logger.info(`Enhanced question with current date context: ${formattedDate}`);
+    
+    // Run the agent to answer the question with the selected tools
     const result = await agent.run({
-      task: question,
+      task: enhancedQuestion,
+      tools: availableTools.length > 0 ? availableTools : undefined,
       conversation: {
         id: `discord-${message.id}`,
         messages: [],
@@ -1050,6 +1410,13 @@ async function handleAskCommand(message: any, question: string, agent: Agent): P
     });
     
     logger.info(`Got agent response with length: ${result.response.length}`);
+    logger.info(`The agent made ${result.toolCalls?.length || 0} tool calls`);
+    
+    // Log which tools were used
+    if (result.toolCalls && result.toolCalls.length > 0) {
+      const toolsUsed = result.toolCalls.map(tc => tc.tool).join(', ');
+      logger.info(`Tools used by agent: ${toolsUsed}`);
+    }
     
     // Split long responses if needed
     const responses = splitMessage(result.response);
@@ -1188,8 +1555,14 @@ async function handleResearchCommand(
         ).join('\n')
       : 'No sources available';
     
+    // Get current date
+    const currentDate = new Date();
+    const formattedDate = currentDate.toDateString();
+    
     // Generate detailed analysis using the agent with a more compact prompt
     const researchPrompt = `
+      Current date: ${formattedDate}
+      
       Create a comprehensive analysis about: "${topic}"
       
       Search summary: ${searchResults.answer || 'No summary available'}
@@ -1199,11 +1572,14 @@ async function handleResearchCommand(
       
       Analysis should include:
       1. Topic overview
-      2. Key trends and insights
-      3. Your expert perspective
-      4. Data points and examples
-      5. Challenges or controversies
-      6. Implications and assessment
+      2. Current status as of ${formattedDate}, 2025
+      3. Key trends and insights based on CURRENT data
+      4. Your expert perspective for 2025 and beyond
+      5. Data points and examples from recent timeframes
+      6. Challenges or controversies in the current market
+      7. Implications and assessment
+      
+      IMPORTANT: Your analysis must reflect current conditions as of ${formattedDate}, 2025.
       
       Use clear sections and bullet points where appropriate.
     `;
@@ -1439,6 +1815,82 @@ async function handleTopicsCommand(message: any, memory: ResearchMemorySystem): 
   } catch (error) {
     logger.error('Error retrieving research topics:', error);
     await message.reply("I encountered an error while retrieving research topics. Please try again later.");
+  }
+}
+
+/**
+ * Handle the price command using CoinGecko
+ */
+async function handlePriceCommand(
+  message: any,
+  tokenId: string,
+  cryptoAnalyzer: CryptoAnalyzer
+): Promise<void> {
+  if (!tokenId) {
+    await message.reply("Please provide a token ID to check (e.g., bitcoin, ethereum, solana)");
+    return;
+  }
+  
+  // Clean up the token ID (remove $ prefix if present, convert to lowercase)
+  let cleanTokenId = tokenId.toLowerCase().trim();
+  if (cleanTokenId.startsWith('$')) {
+    cleanTokenId = cleanTokenId.substring(1);
+  }
+  
+  // Remove any non-alphanumeric characters except for hyphens
+  cleanTokenId = cleanTokenId.replace(/[^a-z0-9-]/g, '');
+  
+  // Send thinking message
+  const thinkingMsg = await message.reply(`Fetching price data for ${cleanTokenId}...`);
+  
+  try {
+    // Get price data from CoinGecko
+    const priceData = await cryptoAnalyzer.getTokenPrice(cleanTokenId);
+    
+    // Check if we got an error response
+    if (priceData.error) {
+      await thinkingMsg.edit(`Error: ${priceData.error}`);
+      return;
+    }
+    
+    // Format the price data in a more readable way
+    const formatNumber = (num: number) => {
+      if (num >= 1_000_000_000) {
+        return `$${(num / 1_000_000_000).toFixed(2)}B`;
+      } else if (num >= 1_000_000) {
+        return `$${(num / 1_000_000).toFixed(2)}M`;
+      } else if (num >= 1_000) {
+        return `$${(num / 1_000).toFixed(2)}K`;
+      } else {
+        return `$${num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })}`;
+      }
+    };
+    
+    // Format the date from ISO string to readable format
+    const formatDate = (isoString: string) => {
+      const date = new Date(isoString);
+      return date.toLocaleString();
+    };
+    
+    // Create an embed-like message with the price data
+    const formattedMessage = `
+**${priceData.token.toUpperCase()} Price Information** ${priceData.price_change_24h_percent >= 0 ? '📈' : '📉'}
+
+**Price:** $${priceData.price_usd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })}
+**24h Change:** ${priceData.price_change_24h_percent >= 0 ? '▲' : '▼'} ${Math.abs(priceData.price_change_24h_percent).toFixed(2)}%
+**Market Cap:** ${formatNumber(priceData.market_cap_usd)}
+**24h Volume:** ${formatNumber(priceData.volume_24h_usd)}
+**Last Updated:** ${formatDate(priceData.last_updated_at)}
+
+For a detailed analysis, use \`!token ${priceData.token}\`
+`;
+    
+    // Edit the thinking message with the formatted price data
+    await thinkingMsg.edit(formattedMessage);
+    
+  } catch (error) {
+    logger.error(`Error fetching price data for ${cleanTokenId}:`, error);
+    await thinkingMsg.edit(`I encountered an error while fetching price data for ${cleanTokenId}. Please check the token ID and try again.`);
   }
 }
 
