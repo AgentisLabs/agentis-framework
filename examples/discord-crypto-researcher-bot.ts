@@ -342,7 +342,7 @@ class CryptoAnalyzer {
   private birdEyeTrendingTool: BirdEyeTrendingTool;
   private birdEyeTokenOverviewTool: BirdEyeTokenOverviewTool;
   private coinGeckoPriceTool: CoinGeckoPriceTool;
-  public tavilySearchTool: TavilySearchTool | null;
+  public tavilySearchTool: TavilySearchTool | null = null;
   private memory: VectorResearchMemory;
   private logger: Logger;
   
@@ -376,7 +376,6 @@ class CryptoAnalyzer {
     this.coinGeckoPriceTool = new CoinGeckoPriceTool();
     this.memory = memory;
     this.logger = new Logger('CryptoAnalyzer');
-    this.tavilySearchTool = null; // Initialize with null
     
     // Ensure we have a valid search tool
     if (!tavilySearchTool) {
@@ -487,7 +486,17 @@ class CryptoAnalyzer {
       // Double check that we have access to the search tool BEFORE trying to get token data
       if (!this.tavilySearchTool) {
         this.logger.error(`No search tool available for token ${symbol} analysis`);
-        throw new Error('Search tool not available for token analysis');
+        
+        // Try once more to get the search tool from the registry as a fallback
+        const registry = ToolRegistry.getInstance();
+        const registryTool = registry.getTool('web_search');
+        
+        if (registryTool) {
+          this.logger.info(`Retrieved search tool from registry for ${symbol} analysis`);
+          this.tavilySearchTool = registryTool as TavilySearchTool;
+        } else {
+          throw new Error('Search tool not available for token analysis');
+        }
       }
       
       this.logger.info(`Search tool is available for token ${symbol} analysis`);
@@ -913,18 +922,19 @@ async function startDiscordBot() {
         8. For crypto mentions, use the $ prefix format ($BTC, $ETH, etc.)
         9. You have access to real-time information via specialized tools - use it to provide accurate market data
         10. When discussing market trends or technology developments, use your tools to get current information
-        11. ALWAYS use the CoinGecko price tool when asked about token prices, even if not explicitly requested with !price
-        12. ALWAYS use search tools to get current information before providing analysis on crypto tokens or markets
-        13. When users ask for your perspective on a token, integrate both historical knowledge and current price data
-        14. CRITICAL: You MUST acknowledge the current date is 2025, and explicitly state that your analysis is for 2025, not past years
-        15. ALWAYS check and report the "Last Updated" timestamp when presenting price data to ensure you're using current information
-        16. NEVER reference outdated news, prices, or trends without explicitly stating they are historical references
-        17. When analyzing tokens, ALWAYS use MULTIPLE TOOLS together:
+        11. CRITICAL: You MUST USE MULTIPLE TOOLS TOGETHER for crypto analysis - NEVER rely on a single source
+        12. ALWAYS use the CoinGecko price tool when asked about token prices, even if not explicitly requested with !price
+        13. ALWAYS use search tools to get current information before providing analysis on crypto tokens or markets
+        14. When users ask for your perspective on a token, integrate both historical knowledge and current price data
+        15. CRITICAL: You MUST acknowledge the current date is 2025, and explicitly state that your analysis is for 2025, not past years
+        16. ALWAYS check and report the "Last Updated" timestamp when presenting price data to ensure you're using current information
+        17. NEVER reference outdated news, prices, or trends without explicitly stating they are historical references
+        18. When analyzing tokens, ALWAYS use MULTIPLE TOOLS together:
            - CoinGecko price tool for current price, market cap, and price change data
            - BirdEye token overview for detailed on-chain metrics
            - Web search for latest news and developments
            - Trending tools for market context
-        18. ALWAYS include specific price data and metrics in your analysis, not just general statements
+        19. ALWAYS include specific price data and metrics in your analysis, not just general statements
 
         DISCORD COMMANDS:
         - !ask [question] - Answer a question using your knowledge
@@ -1030,7 +1040,9 @@ async function startDiscordBot() {
         logger.info(`To invite the bot to a server, use this URL: ${inviteUrl}`);
       }
       
-      // Send a message to the first text channel found when bot joins
+      // Startup message is disabled for now
+      // Uncomment this code to enable the startup message
+      /* 
       try {
         // Get first available guild (server)
         const guilds = client.guilds.cache.values();
@@ -1066,6 +1078,7 @@ You can also just mention me with your question!`);
       } catch (error) {
         logger.error('Error sending startup message:', error);
       }
+      */
     });
 
     // Log important events
@@ -1113,8 +1126,20 @@ You can also just mention me with your question!`);
         } else if (isMentioned) {
           // Remove the mention from the message
           const content = message.content.replace(/<@!?[0-9]+>/g, '').trim();
-          command = 'ask'; // Default to ask when mentioned
-          args = content.split(' ');
+          
+          // Check if the mention contains actual content beyond just a greeting
+          const isJustGreeting = content.length < 10 || 
+                                ['hey', 'hello', 'hi', 'sup', 'yo', 'hiya', 'hey there', 'hello there', 'hi there'].includes(content.toLowerCase());
+          
+          if (isJustGreeting) {
+            // For simple greetings, use a special greeting command
+            command = 'greeting';
+            args = [content];
+          } else {
+            // Default to ask when mentioned with actual content
+            command = 'ask';
+            args = content.split(' ');
+          }
         }
         
         // Send typing indicator - this shows "Wexley is typing..." in Discord
@@ -1122,6 +1147,21 @@ You can also just mention me with your question!`);
         
         // Handle commands
         switch (command) {
+          case 'greeting':
+            // Handle simple greetings with a casual response
+            const greetingResponses = [
+              "Hey there. What crypto or market insights do you need today?",
+              "Hello. Looking for some market analysis?",
+              "What's up? Need some crypto insights or market data?",
+              "Hey. What token or market trend should I analyze for you?",
+              "Alright, I'm here. What crypto project are you looking into?",
+              "What crypto or AI trend are you interested in discussing?",
+              "Hey. Point me at a token or market trend you want broken down."
+            ];
+            const randomGreeting = greetingResponses[Math.floor(Math.random() * greetingResponses.length)];
+            await message.reply(randomGreeting);
+            break;
+            
           case 'ask':
           case 'a':
             await handleAskCommand(message, args.join(' '), agent);
@@ -1301,20 +1341,31 @@ async function handleAskCommand(message: any, question: string, agent: Agent): P
       const tokenOverviewTool = registry.getTool('birdeye-token-overview');
       const trendingTool = registry.getTool('birdeye-trending');
       
-      // For outlook and analysis queries, ALWAYS add both price and token overview tools
-      if (isAnalysisOrOutlookQuery && mentionedTokensCount > 0) {
-        logger.info('Question is about crypto outlook/analysis with specific tokens - using ALL relevant tools');
+      // First, double-check that we have search capability for ALL crypto questions
+      if (!availableTools.some(tool => tool.name.includes('search'))) {
+        logger.warn('No search tool in availableTools yet - ensuring it is added');
+        const searchTool = registry.getTool('web_search');
+        if (searchTool && !availableTools.includes(searchTool)) {
+          availableTools.push(searchTool);
+          logger.info('Added search tool for crypto analysis - essential for all crypto queries');
+        }
+      }
+      
+      // For outlook and analysis queries, OR when specific tokens are mentioned,
+      // ALWAYS add ALL tools for comprehensive analysis
+      if (isAnalysisOrOutlookQuery || mentionedTokensCount > 0) {
+        logger.info('Question is about crypto outlook/analysis or specific tokens - using ALL relevant tools');
         
-        // Always use price tool for outlook questions
+        // Always use price tool for outlook questions and token mentions
         if (priceTool) {
           availableTools.push(priceTool);
-          logger.info('Added CoinGecko price tool for outlook/analysis query');
+          logger.info('Added CoinGecko price tool for comprehensive analysis');
         }
         
-        // Always use token overview for outlook questions
+        // Always use token overview for detailed metrics
         if (tokenOverviewTool) {
           availableTools.push(tokenOverviewTool);
-          logger.info('Added BirdEye token overview tool for outlook/analysis query');
+          logger.info('Added BirdEye token overview tool for on-chain metrics');
         }
         
         // Add trending tool for market context
@@ -1322,8 +1373,10 @@ async function handleAskCommand(message: any, question: string, agent: Agent): P
           availableTools.push(trendingTool);
           logger.info('Added BirdEye trending tool for market context');
         }
+        
+        logger.info(`Using ${availableTools.length} tools for comprehensive crypto analysis`);
       } else {
-        // For more general or price-only queries, be more selective
+        // For more general or price-only queries, still use multiple tools when appropriate
         
         // For price-specific queries, add CoinGecko price tool
         if (priceTool && isPriceQuery) {
@@ -1370,11 +1423,13 @@ IMPORTANT: Your analysis must reflect current market conditions as of ${formatte
 INSTRUCTIONS FOR CRYPTO ANALYSIS:
 1. First, use the CoinGecko price tool to get CURRENT price data, market cap, and 24h change
 2. Then, use the BirdEye token overview tool to get detailed on-chain metrics
-3. Next, use web search to find latest news and developments from 2025
-4. Optionally use trending data to provide market context
-5. Integrate ALL this information for a comprehensive analysis
-6. Include SPECIFIC NUMBERS from the tools in your response (prices, percentages, etc.)
-7. Make it clear your analysis is for 2025 market conditions
+3. IMPORTANT: ALWAYS use web search to find latest news and developments from 2025
+4. Use trending data to provide market context
+5. You MUST use MULTIPLE TOOLS TOGETHER for every crypto analysis
+6. Integrate ALL information from different tools for a comprehensive analysis
+7. Include SPECIFIC NUMBERS from the tools in your response (prices, percentages, etc.)
+8. Make it clear your analysis is for 2025 market conditions
+9. NEVER analyze a token without using the search tool
 
 User question: ${question}
 `;
