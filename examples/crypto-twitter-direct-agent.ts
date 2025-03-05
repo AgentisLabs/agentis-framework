@@ -736,9 +736,12 @@ Craft a helpful, expert response. Keep it under 280 characters. Focus on providi
           response = response.substring(0, 277) + '...';
         }
         
+        // Like the tweet as a courtesy before replying
+        await this.twitterConnector.like(tweet.id);
+        
         // Reply to the tweet
         await this.twitterConnector.tweet(response, { replyTo: tweet.id });
-        logger.info('Replied to mention about tokens');
+        logger.info('Liked and replied to mention about tokens');
       } else {
         // Generic mention
         const result = await this.baseAgent.run({
@@ -753,9 +756,12 @@ Craft a friendly, professional response that reflects your expertise in crypto m
           response = response.substring(0, 277) + '...';
         }
         
+        // Like the tweet as a courtesy before replying
+        await this.twitterConnector.like(tweet.id);
+        
         // Reply to the tweet
         await this.twitterConnector.tweet(response, { replyTo: tweet.id });
-        logger.info('Replied to general mention');
+        logger.info('Liked and replied to general mention');
       }
     } catch (error) {
       logger.error('Error handling mention', error);
@@ -802,9 +808,12 @@ Create a thoughtful response that continues the conversation and demonstrates yo
         response = response.substring(0, 277) + '...';
       }
       
+      // Like the tweet as a courtesy before replying
+      await this.twitterConnector.like(tweet.id);
+      
       // Reply to the tweet
       await this.twitterConnector.tweet(response, { replyTo: tweet.id });
-      logger.info('Replied to reply');
+      logger.info('Liked and replied to reply');
     } catch (error) {
       logger.error('Error handling reply', error);
     }
@@ -818,8 +827,13 @@ Create a thoughtful response that continues the conversation and demonstrates yo
       const replyParts = decision.split('reply:');
       if (replyParts.length > 1 && replyParts[1]) {
         const replyText = replyParts[1].trim();
+        
+        // Like the tweet as a courtesy before replying
+        await this.twitterConnector.like(tweet.id);
+        
+        // Reply to the tweet
         await this.twitterConnector.tweet(replyText, { replyTo: tweet.id });
-        logger.info('Replied to tweet about crypto');
+        logger.info('Liked and replied to tweet about crypto');
       }
     }
     
