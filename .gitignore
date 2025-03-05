@@ -39,11 +39,27 @@ Thumbs.db
 
 # Data directories
 data/
+debug/
 
-*.png
-*.md
+# Examples - include only discord-researcher-bot.ts
+examples/
+!examples/discord-researcher-bot.ts
 
-.json
+# Testing and development files
+test-*.js
+manual-*.js
+
+# Personal notes and internal docs
 agent-twitter.md
 roadmap.md
+tavily.md
+CLAUDE.md
+
+# Markdown files
+*.md
+# Don't ignore these important markdown files
+!README.md
+!LICENSE
+!CHANGELOG.md
+!CONTRIBUTING.md
 

@@ -1,39 +1,20 @@
 {
-  "name": "agentis",
+  "name": "agentis-framework",
   "version": "0.1.0",
-  "description": "A powerful framework for building autonomous AI agents with memory, planning, and multi-agent coordination",
+  "description": "A powerful framework for building autonomous AI agents with memory, planning, and platform connectors",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": [
+    "dist/**/*"
+  ],
   "scripts": {
-    "tavily-test": "ts-node -r tsconfig-paths/register examples/tavily-test.ts",
     "start": "node dist/index.js",
     "dev": "nodemon --exec ts-node -r tsconfig-paths/register src/index.ts",
     "build": "tsc",
     "test": "jest",
     "lint": "eslint 'src/**/*.{js,ts}'",
     "format": "prettier --write 'src/**/*.{js,ts}'",
-    "showcase": "ts-node -r tsconfig-paths/register examples/agentis-showcase.ts",
-    "demo": "npm run showcase",
-    "chat": "ts-node -r tsconfig-paths/register examples/conversational-agent.ts",
-    "openai": "ts-node -r tsconfig-paths/register examples/openai-agent.ts",
-    "multi-provider": "ts-node -r tsconfig-paths/register examples/multi-provider-swarm.ts",
-    "swarm": "ts-node -r tsconfig-paths/register examples/agent-swarm.ts",
-    "enhanced-swarm": "ts-node -r tsconfig-paths/register examples/enhanced-multi-provider-swarm.ts",
-    "basic-swarm": "ts-node -r tsconfig-paths/register examples/enhanced-swarm-basic.ts",
-    "dependency-demo": "ts-node -r tsconfig-paths/register examples/dependency-inference-demo.ts",
-    "integrated-demo": "ts-node -r tsconfig-paths/register examples/integrated-showcase.ts",
-    "feedback-demo": "ts-node -r tsconfig-paths/register examples/feedback-demo.ts",
-    "stock-research": "ts-node -r tsconfig-paths/register examples/stock-research-team.ts",
-    "crypto-agent": "ts-node -r tsconfig-paths/register examples/autonomous-crypto-openai-agent-fixed.ts",
-    "crypto-twitter": "ts-node -r tsconfig-paths/register examples/crypto-twitter-direct-agent.ts",
-    "twitter": "ts-node -r tsconfig-paths/register examples/twitter-direct-bot.ts",
-    "twitter-bot": "ts-node -r tsconfig-paths/register examples/twitter-direct-bot.ts",
-    "twitter-trends": "ts-node -r tsconfig-paths/register -e \"require('./examples/twitter-direct-bot').getTrends()\"",
-    "discord": "ts-node -r tsconfig-paths/register examples/discord-bot-simple.ts",
-    "discord-bot": "ts-node -r tsconfig-paths/register examples/discord-bot-simple.ts",
-    "discord-researcher": "ts-node -r tsconfig-paths/register examples/discord-researcher-bot.ts",
-    "discord-crypto": "ts-node -r tsconfig-paths/register examples/discord-crypto-researcher-bot.ts",
-    "discord-swarm": "ts-node -r tsconfig-paths/register examples/discord-agent-swarm.ts"
+    "prepublishOnly": "npm run build"
   },
   "keywords": [
     "ai",
@@ -42,9 +23,22 @@
     "anthropic",
     "claude",
     "llm",
-    "framework"
+    "framework",
+    "discord",
+    "twitter",
+    "memory",
+    "planning",
+    "agentis"
   ],
-  "author": "",
+  "homepage": "https://github.com/agentislabs/agentis-framework",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/agentislabs/agentis-framework.git"
+  },
+  "bugs": {
+    "url": "https://github.com/agentislabs/agentis-framework/issues"
+  },
+  "author": "Thomas Faulds",
   "license": "MIT",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.38.0",

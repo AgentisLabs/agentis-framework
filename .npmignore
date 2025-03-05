@@ -1,0 +1,42 @@
+# Development files
+.env
+.env.*
+node_modules/
+.vscode/
+.idea/
+*.log
+npm-debug.log*
+
+# Source files (since we're publishing the compiled output)
+src/
+
+# Test files
+test/
+tests/
+__tests__/
+**/*.test.js
+**/*.test.ts
+**/*.spec.js
+**/*.spec.ts
+jest.config.js
+
+# Example files
+examples/
+debug/
+manual-*.js
+test-*.js
+
+# Misc
+.git/
+.github/
+.gitignore
+.DS_Store
+CLAUDE.md
+personas/
+data/
+
+# Build configuration
+tsconfig.json
+tslint.json
+.eslintrc*
+.prettierrc*

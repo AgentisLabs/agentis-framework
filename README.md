@@ -1,6 +1,6 @@
-# Agentis
+# Agentis Framework
 
-Agentis is a powerful framework for building autonomous AI agents with advanced capabilities like memory, planning, and multi-agent coordination.
+Agentis Framework is a powerful toolkit for building autonomous AI agents with advanced capabilities like memory, planning, and platform integrations.
 
 ## Features
 
@@ -17,7 +17,7 @@ Agentis is a powerful framework for building autonomous AI agents with advanced 
 ## Installation
 
 ```bash
-npm install agentis
+npm install agentis-framework
 ```
 
 ## Quick Start
@@ -60,7 +60,7 @@ The showcase demonstrates:
 ### Basic Usage
 
 ```typescript
-import { Agent, Memory, AgentRole } from 'agentis';
+import { Agent, InMemoryMemory, AgentRole } from 'agentis-framework';
 
 // Create a simple agent
 const agent = new Agent({
@@ -74,7 +74,7 @@ const agent = new Agent({
 });
 
 // Set up memory
-agent.setMemory(new Memory());
+agent.setMemory(new InMemoryMemory());
 
 // Run the agent with a task
 await agent.run({
@@ -91,10 +91,10 @@ await agent.run({
 import { 
   Agent, 
   AgentSwarm, 
-  Memory, 
+  InMemoryMemory, 
   PlanningStrategy, 
   DiscordConnector 
-} from 'agentis';
+} from 'agentis-framework';
 
 // Create specialized agents
 const researchAgent = new Agent({
@@ -133,7 +133,7 @@ import {
   Agent, 
   AgentRole, 
   TwitterDirectConnector 
-} from 'agentis';
+} from 'agentis-framework';
 
 // Create the agent
 const agent = new Agent({
@@ -229,7 +229,7 @@ import {
   TavilySearchTool,
   EnhancedAgentSwarm,
   AgentSpecialization
-} from 'agentis';
+} from 'agentis-framework';
 
 // Create a researcher agent using OpenAI with web search capability
 const researcherAgent = new Agent(
@@ -316,7 +316,7 @@ import {
   ProviderType, 
   AnthropicProvider, 
   OpenAIProvider 
-} from 'agentis';
+} from 'agentis-framework';
 
 // Create an agent with Anthropic's Claude
 const claudeAgent = new Agent({
@@ -359,7 +359,7 @@ Agentis will automatically select a provider based on available API keys if you 
 Agentis supports streaming responses for a more interactive experience:
 
 ```typescript
-import { Agent, AgentRole } from 'agentis';
+import { Agent, AgentRole } from 'agentis-framework';
 
 // Create the agent
 const agent = new Agent({
@@ -402,7 +402,7 @@ import {
   EnhancedMemory, 
   PineconeStore, 
   Agent
-} from 'agentis';
+} from 'agentis-framework';
 
 // Set up vector storage with Pinecone
 const vectorStore = new PineconeStore({
@@ -465,7 +465,7 @@ import {
   DependencyInference, 
   PlanTask, 
   EnhancedPlanner 
-} from 'agentis';
+} from 'agentis-framework';
 
 // Tasks with no dependencies defined yet
 const tasks: PlanTask[] = [
