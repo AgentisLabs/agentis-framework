@@ -588,7 +588,7 @@ class CryptoAnalyzer {
 }
 
 // Function to split message content if it exceeds Discord's limit
-function splitMessage(text: string, maxLength = 2000) {
+function splitMessage(text: string, maxLength = 1900) { // Use 1900 instead of 2000 to leave room for headers
   if (text.length <= maxLength) return [text];
   
   const chunks = [];
@@ -598,26 +598,30 @@ function splitMessage(text: string, maxLength = 2000) {
   const lines = text.split('\n');
   
   for (const line of lines) {
-    // If adding this line would exceed the max length, push current chunk and start a new one
-    if (currentChunk.length + line.length + 1 > maxLength) {
-      // If the current line itself is too long
+    // Calculate the length if we add this line (plus newline)
+    const newLength = currentChunk.length + (currentChunk ? 1 : 0) + line.length;
+    
+    // If adding this line would exceed the max length
+    if (newLength > maxLength) {
+      // If the current chunk is not empty, push it
+      if (currentChunk) {
+        chunks.push(currentChunk);
+        currentChunk = '';
+      }
+      
+      // If the line itself is too long, split it
       if (line.length > maxLength) {
-        // Add current chunk if not empty
-        if (currentChunk) {
-          chunks.push(currentChunk);
-          currentChunk = '';
-        }
-        
-        // Split the long line
         let remainingLine = line;
+        
         while (remainingLine.length > 0) {
+          // Make sure we don't exceed max length
           const chunkSize = Math.min(remainingLine.length, maxLength);
-          chunks.push(remainingLine.substring(0, chunkSize));
+          const chunk = remainingLine.substring(0, chunkSize);
+          chunks.push(chunk);
           remainingLine = remainingLine.substring(chunkSize);
         }
       } else {
-        // Push current chunk and start new one with this line
-        chunks.push(currentChunk);
+        // Start new chunk with this line
         currentChunk = line;
       }
     } else {
@@ -633,6 +637,19 @@ function splitMessage(text: string, maxLength = 2000) {
   // Add last chunk if there is one
   if (currentChunk) {
     chunks.push(currentChunk);
+  }
+  
+  // Verify none of the chunks exceed the limit
+  for (let i = 0; i < chunks.length; i++) {
+    if (chunks[i].length > maxLength) {
+      // This shouldn't happen with the logic above, but just in case
+      logger.warn(`Chunk ${i} exceeds max length: ${chunks[i].length} > ${maxLength}`);
+      
+      // Force split at max length
+      const originalChunk: string = chunks[i];
+      chunks[i] = originalChunk.substring(0, maxLength);
+      chunks.splice(i + 1, 0, originalChunk.substring(maxLength));
+    }
   }
   
   return chunks;
@@ -1039,12 +1056,29 @@ async function handleAskCommand(message: any, question: string, agent: Agent): P
     
     logger.info(`Split into ${responses.length} parts`);
     
-    // Edit the "thinking" message with the first part
-    await thinkingMsg.edit(responses[0]);
-    
-    // Send additional messages for remaining parts
-    for (let i = 1; i < responses.length; i++) {
-      await message.channel.send(responses[i]);
+    try {
+      // Edit the "thinking" message with the first part
+      await thinkingMsg.edit(responses[0]);
+      
+      // Send additional messages for remaining parts
+      for (let i = 1; i < responses.length; i++) {
+        await message.channel.send(responses[i]);
+      }
+    } catch (editError) {
+      logger.error(`Error editing ask response message: ${editError}`);
+      
+      // If edit fails, try sending a new message instead
+      try {
+        await thinkingMsg.edit(`Here's my response:`);
+        
+        // Send all parts as new messages
+        for (const response of responses) {
+          await message.channel.send(response);
+        }
+      } catch (sendError) {
+        logger.error(`Error sending ask response messages: ${sendError}`);
+        throw sendError;
+      }
     }
   } catch (error) {
     logger.error(`Error running agent for question: ${question}`, error);
@@ -1100,12 +1134,37 @@ async function handleResearchCommand(
       // Use cached research
       const responses = splitMessage(cachedResearch);
       
-      // Edit the "thinking" message with the first part
-      await thinkingMsg.edit(`**Research on "${topic}"** (from memory):\n\n${responses[0]}`);
-      
-      // Send additional messages for remaining parts
-      for (let i = 1; i < responses.length; i++) {
-        await message.channel.send(responses[i]);
+      try {
+        // Edit the "thinking" message with the first part
+        // Add header only if there's enough space
+        const header = `**Research on "${topic}"** (from memory):\n\n`;
+        
+        if (responses[0].length + header.length <= 1950) {  // Very conservative limit
+          await thinkingMsg.edit(header + responses[0]);
+        } else {
+          // If header + first part is too long, just use the first part
+          await thinkingMsg.edit(responses[0]);
+        }
+        
+        // Send additional messages for remaining parts
+        for (let i = 1; i < responses.length; i++) {
+          await message.channel.send(responses[i]);
+        }
+      } catch (editError) {
+        logger.error(`Error editing cached research message: ${editError}`);
+        
+        // If edit fails, try sending a new message instead
+        try {
+          await thinkingMsg.edit(`I've found previous research on "${topic}". Here are my findings:`);
+          
+          // Send all parts as new messages
+          for (const response of responses) {
+            await message.channel.send(response);
+          }
+        } catch (sendError) {
+          logger.error(`Error sending cached research messages: ${sendError}`);
+          throw sendError;
+        }
       }
       
       return;
@@ -1161,12 +1220,37 @@ async function handleResearchCommand(
     const responses = splitMessage(analysisResult.response);
     logger.info(`Split analysis into ${responses.length} parts for Discord message limits`);
     
-    // Edit the "thinking" message with the first part
-    await thinkingMsg.edit(`**Research on "${topic}"**:\n\n${responses[0]}`);
-    
-    // Send additional messages for remaining parts
-    for (let i = 1; i < responses.length; i++) {
-      await message.channel.send(responses[i]);
+    try {
+      // Edit the "thinking" message with the first part
+      // Add header only if there's enough space
+      const header = `**Research on "${topic}"**:\n\n`;
+      
+      if (responses[0].length + header.length <= 1950) {  // Even more conservative limit
+        await thinkingMsg.edit(header + responses[0]);
+      } else {
+        // If header + first part is too long, just use the first part
+        await thinkingMsg.edit(responses[0]);
+      }
+      
+      // Send additional messages for remaining parts
+      for (let i = 1; i < responses.length; i++) {
+        await message.channel.send(responses[i]);
+      }
+    } catch (editError) {
+      logger.error(`Error editing message: ${editError}`);
+      
+      // If edit fails, try sending a new message instead
+      try {
+        await thinkingMsg.edit(`I've completed research on "${topic}". Here are my findings:`);
+        
+        // Send all parts as new messages
+        for (const response of responses) {
+          await message.channel.send(response);
+        }
+      } catch (sendError) {
+        logger.error(`Error sending messages: ${sendError}`);
+        throw sendError;
+      }
     }
     
     logger.info(`Successfully completed research on "${topic}"`);
@@ -1247,12 +1331,37 @@ async function handleTokenCommand(
     
     logger.info(`Split into ${responses.length} parts`);
     
-    // Edit the "thinking" message with the first part
-    await thinkingMsg.edit(`**Analysis of $${tokenSymbol}**:\n\n${responses[0]}`);
-    
-    // Send additional messages for remaining parts
-    for (let i = 1; i < responses.length; i++) {
-      await message.channel.send(responses[i]);
+    try {
+      // Edit the "thinking" message with the first part
+      // Add header only if there's enough space
+      const header = `**Analysis of $${tokenSymbol}**:\n\n`;
+      
+      if (responses[0].length + header.length <= 1950) {  // Very conservative limit
+        await thinkingMsg.edit(header + responses[0]);
+      } else {
+        // If header + first part is too long, just use the first part
+        await thinkingMsg.edit(responses[0]);
+      }
+      
+      // Send additional messages for remaining parts
+      for (let i = 1; i < responses.length; i++) {
+        await message.channel.send(responses[i]);
+      }
+    } catch (editError) {
+      logger.error(`Error editing token analysis message: ${editError}`);
+      
+      // If edit fails, try sending a new message instead
+      try {
+        await thinkingMsg.edit(`I've completed analysis of $${tokenSymbol}. Here are my findings:`);
+        
+        // Send all parts as new messages
+        for (const response of responses) {
+          await message.channel.send(response);
+        }
+      } catch (sendError) {
+        logger.error(`Error sending token analysis messages: ${sendError}`);
+        throw sendError;
+      }
     }
   } catch (error) {
     logger.error(`Error analyzing token ${tokenSymbol}:`, error);
