@@ -32,6 +32,7 @@
     "discord": "ts-node -r tsconfig-paths/register examples/discord-bot-simple.ts",
     "discord-bot": "ts-node -r tsconfig-paths/register examples/discord-bot-simple.ts",
     "discord-researcher": "ts-node -r tsconfig-paths/register examples/discord-researcher-bot.ts",
+    "discord-crypto": "ts-node -r tsconfig-paths/register examples/discord-crypto-researcher-bot.ts",
     "discord-swarm": "ts-node -r tsconfig-paths/register examples/discord-agent-swarm.ts"
   },
   "keywords": [
