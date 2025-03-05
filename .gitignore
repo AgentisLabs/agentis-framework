@@ -44,6 +44,9 @@ debug/
 # Examples - include only discord-researcher-bot.ts
 examples/
 !examples/discord-researcher-bot.ts
+# Exclude crypto agent files
+examples/crypto-twitter-direct-agent.ts
+examples/*crypto*.ts
 
 # Testing and development files
 test-*.js
@@ -54,6 +57,7 @@ agent-twitter.md
 roadmap.md
 tavily.md
 CLAUDE.md
+
 
 
 # Markdown files
