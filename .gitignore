@@ -41,12 +41,12 @@ Thumbs.db
 data/
 debug/
 
-# Examples - include only discord-researcher-bot.ts
-examples/
+
+
 !examples/discord-researcher-bot.ts
-# Exclude crypto agent files
+
 examples/crypto-twitter-direct-agent.ts
-examples/*crypto*.ts
+
 examples/discord-bot-simple.ts
 examples/discord-bot.ts
 examples/price-checker.ts
