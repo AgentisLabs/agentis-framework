@@ -183,6 +183,33 @@ export class Agent extends EventEmitter {
         }
       }
     }
+    
+    // Retrieve relevant information from knowledge base if available
+    let knowledgeBaseContext = '';
+    if (this.config.knowledgeBase && options.task) {
+      try {
+        this.logger.debug('Querying knowledge base for relevant information');
+        this.emit(AgentEvent.THINKING, { message: 'Retrieving relevant information from knowledge base...' });
+        
+        knowledgeBaseContext = await this.config.knowledgeBase.generateContext(options.task, {
+          maxResults: this.config.knowledgeBaseMaxResults || 3,
+          relevanceThreshold: this.config.knowledgeBaseThreshold || 0.6,
+          format: 'markdown'
+        });
+        
+        if (knowledgeBaseContext) {
+          this.logger.debug('Retrieved relevant information from knowledge base');
+          if (context) {
+            context += '\n\n';
+          }
+          context += knowledgeBaseContext;
+        } else {
+          this.logger.debug('No relevant information found in knowledge base');
+        }
+      } catch (error) {
+        this.logger.error('Error retrieving knowledge base context', error);
+      }
+    }
 
     // Add user message with context if available
     const userMessage: Message = {

@@ -50,6 +50,22 @@ export { EnhancedMemory } from './memory/enhanced-memory';
 export { EmbeddingService, EmbeddingServiceConfig } from './memory/embedding-service';
 export { PineconeStore, VectorStore } from './memory/pinecone-store';
 
+// Knowledge Graph and Knowledge Base
+export { 
+  KnowledgeGraph, 
+  KnowledgeNode, 
+  KnowledgeRelationship,
+  KnowledgeGraphConfig,
+  KnowledgeGraphQueryResult
+} from './memory/knowledge-graph';
+export { 
+  KnowledgeBase,
+  FAQEntry,
+  DocumentEntry,
+  KnowledgeBaseConfig,
+  KnowledgeBaseQueryResult
+} from './memory/knowledge-base';
+
 // Planning
 export { 
   PlannerInterface, 

@@ -1,0 +1,62 @@
+[
+  {
+    "question": "What is Agentis Framework?",
+    "answer": "Agentis Framework is a TypeScript-based agent framework for building sophisticated AI agents with capabilities like memory, planning, tool usage, and agent swarms.",
+    "category": "General",
+    "tags": ["overview", "basics"]
+  },
+  {
+    "question": "How do I install Agentis?",
+    "answer": "You can install Agentis using npm: `npm install agentis`",
+    "category": "Installation",
+    "tags": ["setup", "getting-started"]
+  },
+  {
+    "question": "What memory systems are available?",
+    "answer": "Agentis offers several memory systems including InMemory for simple storage, VectorMemory for semantic search, and EnhancedMemory which combines short-term, long-term, and structured note storage.",
+    "category": "Features",
+    "tags": ["memory", "features"]
+  },
+  {
+    "question": "How do I create an agent swarm?",
+    "answer": "Create an agent swarm by instantiating the AgentSwarm class with a coordinator agent configuration and an array of specialist agents.",
+    "category": "Usage",
+    "tags": ["swarm", "collaboration"]
+  },
+  {
+    "question": "What is a knowledge base in Agentis?",
+    "answer": "A knowledge base in Agentis is a system that stores and retrieves structured information (FAQs and documents) and uses semantic search and a knowledge graph to find relevant information for agent responses.",
+    "category": "Features",
+    "tags": ["knowledge-base", "memory"]
+  },
+  {
+    "question": "How do agents use tools?",
+    "answer": "Agents can use tools by passing tool objects to the agent's run method. The agent will automatically call the appropriate tool based on the user's query and incorporate the results into its response.",
+    "category": "Usage",
+    "tags": ["tools", "features"]
+  },
+  {
+    "question": "What is autonomous planning?",
+    "answer": "Autonomous planning in Agentis allows agents to break down complex tasks into subtasks, determine dependencies between tasks, and execute them in the optimal order. This is handled by planner components like DefaultPlanner and EnhancedPlanner.",
+    "category": "Features",
+    "tags": ["planning", "autonomy"]
+  },
+  {
+    "question": "How do I connect an agent to Discord?",
+    "answer": "Use the DiscordConnector class to connect an agent to Discord. Initialize it with your Discord bot token and either an agent or agent swarm instance, then call the start() method.",
+    "category": "Integration",
+    "tags": ["discord", "platforms"]
+  },
+  {
+    "question": "What LLM providers are supported?",
+    "answer": "Agentis supports multiple LLM providers including OpenAI, Anthropic, and a flexible provider system that lets you integrate other LLM APIs through the LLMProviderInterface.",
+    "category": "Configuration",
+    "tags": ["llm", "providers"]
+  },
+  {
+    "question": "How do I create a custom tool?",
+    "answer": "Create a custom tool by implementing the Tool interface which requires a name, description, schema (for parameters), and an execute method that performs the tool's function.",
+    "category": "Extending",
+    "tags": ["tools", "customization"]
+  }
+]

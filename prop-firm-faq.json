@@ -1,0 +1,170 @@
+[
+  {
+    "question": "Where do you operate out of? Are you licensed?",
+    "answer": "We are US-based company with exchange licenses from listed exchanges. This is a simulated environment you will be trading on initially. We will move you to a interactive brokers or sterling environment when we want to scale your account and remove any trading restrictions. At this point, we will give you additional resources such as developers to help automate your strategy, data analysts that will help you with your edge.",
+    "category": "General Questions",
+    "tags": ["location", "licensing", "company"]
+  },
+  {
+    "question": "Is your drawdown based on balance or equity?",
+    "answer": "Futures Accounts offer End of Day(EOD) Drawdown which is based on the end of day closing balance of your account. This stops once your EOD drawdown reaches the original account starting balance. For example, you start at 100k, with an $800 dollar drawdown. If you make $400 on the first day, your drawdown is now at 99,600. If you then lose 200, your drawdown stays at 99,600. If you then make 200, your drawdown is still 99,600. Once your account hits 100,800, your drawdown will lock at the 100k starting balance. So, even if you take your account to 110k, your drawdown stays at 100k. We will never offer intraday equity trailing drawdown as we believe it's predatory, and unfair to traders. We don't use them on our strategies, so we choose not to apply them in our evaluations.",
+    "category": "Evaluation Questions",
+    "tags": ["drawdown", "balance", "equity"]
+  },
+  {
+    "question": "How do you calculate Daily Loss Limit?",
+    "answer": "For Futures, we have no daily loss limits. Only the initial End of Day Drawdown, which will lock at your starting balance.",
+    "category": "Evaluation Questions",
+    "tags": ["daily loss", "limits", "drawdown"]
+  },
+  {
+    "question": "Are there any Activation Fees?",
+    "answer": "We charge ZERO activation fees to our traders! We try and keep the process simple, with no extra hidden charges. The only fees you'll pay with us is the initial evaluation fee. Our evaluation fees are billed monthly until a trader passes, at that point billing is paused and no further costs fall on the trader.",
+    "category": "Payout Questions",
+    "tags": ["fees", "activation", "costs"]
+  },
+  {
+    "question": "Am I trading with real money?",
+    "answer": "When you are on our platform initially, you will be in a simulated environment. We will notify you when you are not on one anymore, and we will move you over to another platform.",
+    "category": "General Questions",
+    "tags": ["money", "simulation", "platform"]
+  },
+  {
+    "question": "How do I become an affiliate or partner?",
+    "answer": "We require to have a call with you prior to becoming an affiliate. Not everyone is accepted.",
+    "category": "General Questions",
+    "tags": ["affiliates", "partners", "application"]
+  },
+  {
+    "question": "Is there a time limit for evaluations?",
+    "answer": "There is no time limit in evaluation accounts.",
+    "category": "Evaluation Questions",
+    "tags": ["time limit", "evaluation", "rules"]
+  },
+  {
+    "question": "What instruments am I able to trade?",
+    "answer": "You have access to 300-400 of the most liquid stocks in the stock market as well as all index etfs. We update our list of tradeable names on a weekly basis. If a name is not available, please reach out and we will evaluate if we can add it to your list of tradeable instruments.",
+    "category": "Evaluation Questions",
+    "tags": ["instruments", "stocks", "trading"]
+  },
+  {
+    "question": "How is End Of Day drawdown calculated?",
+    "answer": "On our 1 step evaluation, drawdown is based on equity high of the account. On our 2 step account, it based on your end of day balance. When you are funded, your drawdown will correspond with the drawdown type of your evaluation.",
+    "category": "Evaluation Questions",
+    "tags": ["drawdown", "calculation", "evaluation"]
+  },
+  {
+    "question": "Are there any restrictions on my trading?",
+    "answer": "We only offer day trading as of now. We don't allow any HFT strategies, spread trading, or any system that is blatantly try to game the system. We are looking for realistic trading strategies that will work in a real environment.",
+    "category": "Evaluation Questions",
+    "tags": ["restrictions", "rules", "day trading"]
+  },
+  {
+    "question": "Which countries do you payout to?",
+    "answer": "We payout using deel. Here is the list of countries that deel does not payout to: https://help.letsdeel.com/hc/en-gb/articles/4407737728273-Where-Is-Deel-Available-. You can start getting paid out once you hit 4% profit in the funded account stage.",
+    "category": "Payout Questions",
+    "tags": ["payout", "countries", "payment"]
+  },
+  {
+    "question": "Does EOD drawdown stop at account balance? Does daily loss ever get removed?",
+    "answer": "Yes, EOD drawdown stops once it gets to account balance. The daily loss can be removed upon request, but we believe it's a large enough daily loss that it is good for risk management.",
+    "category": "Funded Account",
+    "tags": ["drawdown", "daily loss", "risk management"]
+  },
+  {
+    "question": "Does consistency rule stay in the funded account?",
+    "answer": "Yes, to get paid out you may not have 40% of your overall profits come from more than one trading day. This is to encourage consistent strategies and not gambling.",
+    "category": "Funded Account",
+    "tags": ["consistency", "payout", "rules"]
+  },
+  {
+    "question": "Is there a payout schedule?",
+    "answer": "No, once you are in profit, and have reached 4% profit target in the funded account, you can request any payout. There is no max withdrawal like many firms will do to cap how much you can make.",
+    "category": "Payout Questions",
+    "tags": ["payout", "schedule", "withdrawal"]
+  },
+  {
+    "question": "What are the payout rules?",
+    "answer": "For Futures: Once you reach pass the evaluation and reach the funded stage you need to grow your account 1% (101k). At this point we will pause your trading, and move you to a live brokerage account with one of our brokers: Interactive Brokers, NinjaTrader, or T3 Global. You are then eligible for payouts above the 1% buffer zone. For example: Your account is equal to $101,200, you can withdraw the $200. There are no payout caps, you can withdraw as little as $100, or $50k all at once. We process payments within a 3 day time window, usually trying to process the same day when possible. Payouts are processed by Bank Wire, or can also be sent through Crypto. Traders receive an 80% split of their profits.",
+    "category": "Payout Questions",
+    "tags": ["payout", "rules", "profit"]
+  },
+  {
+    "question": "Are there any hidden rules I can't see on your site?",
+    "answer": "No we are very transparent with our rules, funding, and data. Everything is listed clearly, and we are not trying to hide anything. If you have any questions at all, please do not hesitate to reach out! max(at)traderslaunch(dotcom)",
+    "category": "General Questions",
+    "tags": ["rules", "transparency", "hidden"]
+  },
+  {
+    "question": "Is there any amount of minimum trading days?",
+    "answer": "For the evaluation stage, we have a 3 day minimum trading days. Once funded, there are no minimum days before being able to request payout.",
+    "category": "Evaluation Questions",
+    "tags": ["trading days", "minimum", "evaluation"]
+  },
+  {
+    "question": "Am I allowed to swing trade?",
+    "answer": "You are not allowed to swing trade when you are trying out. In the funded stage, if you have made at least 10% on your account, then please reach out and we will hop on a call to discuss. It's our goal to scale traders, and accommodate to their needs.",
+    "category": "Evaluation Questions",
+    "tags": ["swing trade", "overnight", "positions"]
+  },
+  {
+    "question": "What is a prop trading firm?",
+    "answer": "A proprietary trading firm (prop firm) is a company that trades financial instruments using its own capital rather than client funds. We provide traders with our capital to trade in exchange for a share of the profits they generate.",
+    "category": "General Questions",
+    "tags": ["prop firm", "definition", "basics"]
+  },
+  {
+    "question": "What is the evaluation process?",
+    "answer": "Our evaluation process assesses your trading abilities before providing you with our capital. We offer both 1-step and 2-step evaluation paths. You must demonstrate consistent profitability while adhering to our risk management rules before advancing to a funded account.",
+    "category": "Evaluation Questions",
+    "tags": ["evaluation", "process", "steps"]
+  },
+  {
+    "question": "What profit split do you offer?",
+    "answer": "We offer an 80/20 profit split, meaning you keep 80% of the profits you generate with our capital, and we retain 20%. This is one of the most competitive splits in the industry.",
+    "category": "Funded Account",
+    "tags": ["profit split", "payout", "percentage"]
+  },
+  {
+    "question": "How much capital can I get access to?",
+    "answer": "We offer funded accounts ranging from $25,000 to $200,000. Your initial allocation depends on which evaluation tier you successfully complete. As you demonstrate consistent profitability, we can scale your account up to higher amounts.",
+    "category": "Funded Account",
+    "tags": ["capital", "account size", "scaling"]
+  },
+  {
+    "question": "What brokerages do you work with?",
+    "answer": "For our live funded accounts, we work with Interactive Brokers, Ninjatrader, and T3 Global based on the specific needs of our traders.",
+    "category": "Funded Account",
+    "tags": ["brokerages", "interactive brokers", "ninjatrader", "t3"]
+  },
+  {
+    "question": "Can I trade SPX, NDX, US30, gold?",
+    "answer": "Yes we offer Index future equivalents. Futures offer better spreads than Forex, allowing almost no slippage. SPX = ES, NDX = NQ, US30 = YM, Gold = GC",
+    "category": "Evaluation Questions",
+    "tags": ["instruments", "futures", "indexes"]
+  },
+  {
+    "question": "What am I allowed to trade?",
+    "answer": "All Futures Contracts. The main ones that people trade with us are S&P500 (ES), Nasdaq-100 (NQ), Gold (GC), and Oil (CL)",
+    "category": "Evaluation Questions",
+    "tags": ["instruments", "futures", "allowed"]
+  },
+  {
+    "question": "What are the trading hours?",
+    "answer": "Trading hours are locked to the New York Session, as it is the highest liquidity session with the most opportunity. Hours are 9:30am - 4pm EST Timezone",
+    "category": "Evaluation Questions",
+    "tags": ["hours", "session", "trading time"]
+  },
+  {
+    "question": "What is the 40% Rule?",
+    "answer": "The 40% rule only exists while in the initial evaluation, and is dropped once in the funded stage. What it means, is that no single trading day can be greater than 40% of your over all profits to pass the evaluation. In the event you have a trading day greater than 40% of your overall passing profits, you will need to continue trading until that day is less than 40% of your total profits. This rule is put in place to help us avoid gamblers. We want traders who show they can be consistent over multiple trades, not get lucky on 1 large single trade.",
+    "category": "Evaluation Questions",
+    "tags": ["40% rule", "consistency", "evaluation"]
+  },
+  {
+    "question": "Are there any inactivity rules?",
+    "answer": "Traders must place a minimum of 1 trade per week during the evaluation phase, otherwise their account will be deactivated. During the funded stage, traders must place a minimum of 1 trade per month before your account will be put on pause. You are still eligible to your profits, and will be paid out regardless.",
+    "category": "Evaluation Questions",
+    "tags": ["inactivity", "activity", "requirements"]
+  }
+]

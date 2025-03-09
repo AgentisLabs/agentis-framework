@@ -58,10 +58,10 @@ export class EmbeddingService {
    */
   constructor(config?: EmbeddingServiceConfig) {
     this.config = {
-      model: 'text-embedding-3-large', // Using large model for better quality
+      model: 'text-embedding-3-small', // Default to small model for compatibility
       dimensions: 1536,
       batchSize: 20,
-      fallbackModel: 'text-embedding-3-small',
+      fallbackModel: 'text-embedding-ada-002', // Older model as fallback
       maxRetries: 3,
       retryDelayMs: 1000,
       enableCache: true,
@@ -225,7 +225,7 @@ export class EmbeddingService {
       return new Array(this.config.dimensions || 1536).fill(0);
     }
     
-    const model = this.config.model || 'text-embedding-3-large';
+    const model = this.config.model || 'text-embedding-3-small';
     const textToEmbed = text.trim();
     
     // Check cache first if enabled
@@ -249,11 +249,17 @@ export class EmbeddingService {
     return await this.withRetry(async () => {
       try {
         // Generate embedding with primary model
-        const response = await this.openai.embeddings.create({
+        const params: any = {
           model,
           input: textToEmbed,
-          dimensions: this.config.dimensions,
-        });
+        };
+        
+        // Only add dimensions parameter for models that support it (text-embedding-3-*)
+        if (model.startsWith('text-embedding-3')) {
+          params.dimensions = this.config.dimensions;
+        }
+        
+        const response = await this.openai.embeddings.create(params);
         
         const embedding = response.data[0].embedding;
         
@@ -274,11 +280,17 @@ export class EmbeddingService {
         if (this.config.fallbackModel && this.config.fallbackModel !== model) {
           this.logger.warn(`Primary model ${model} failed, trying fallback ${this.config.fallbackModel}`, error);
           
-          const fallbackResponse = await this.openai.embeddings.create({
+          const fallbackParams: any = {
             model: this.config.fallbackModel,
             input: textToEmbed,
-            dimensions: this.config.dimensions,
-          });
+          };
+          
+          // Only add dimensions parameter for models that support it (text-embedding-3-*)
+          if (this.config.fallbackModel.startsWith('text-embedding-3')) {
+            fallbackParams.dimensions = this.config.dimensions;
+          }
+          
+          const fallbackResponse = await this.openai.embeddings.create(fallbackParams);
           
           const fallbackEmbedding = fallbackResponse.data[0].embedding;
           

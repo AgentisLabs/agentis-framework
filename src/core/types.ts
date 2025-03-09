@@ -34,6 +34,9 @@ export interface AgentConfig {
   goals: string[];
   systemPrompt?: string;
   model?: string;
+  knowledgeBase?: any; // KnowledgeBase instance
+  knowledgeBaseMaxResults?: number;
+  knowledgeBaseThreshold?: number;
 }
 
 /**
