@@ -1,23 +1,28 @@
-import { KnowledgeBase, EmbeddingService, Agent, AgentRole } from '../src';
+import { KnowledgeBase, EmbeddingService, Agent, AgentRole, DiscordConnector } from '../src';
 import * as fs from 'fs';
-import * as readline from 'readline';
 import dotenv from 'dotenv';
 import path from 'path';
 
 dotenv.config();
 
 /**
- * Prop Trading Firm Agent Demo using Knowledge Base
+ * Prop Trading Firm Discord Bot Support Agent
  * 
- * This script creates a virtual prop trading firm support agent that can answer
- * customer questions about evaluations, funded accounts, and payouts.
+ * This script creates a Discord bot support agent for a proprietary trading firm
+ * that can answer customer questions about evaluations, funded accounts, and payouts
+ * directly in a Discord server using a knowledge base.
  */
 async function main() {
-  console.log("Starting Prop Trading Firm Support Agent...");
+  console.log("Starting Prop Trading Firm Discord Support Agent...");
 
-  // Ensure OpenAI API key is available
+  // Check for required environment variables
   if (!process.env.OPENAI_API_KEY) {
     console.error('OPENAI_API_KEY is required in your .env file');
+    process.exit(1);
+  }
+
+  if (!process.env.DISCORD_BOT_TOKEN) {
+    console.error('DISCORD_BOT_TOKEN is required in your .env file');
     process.exit(1);
   }
 
@@ -105,10 +110,10 @@ async function main() {
 
   // Create a customer support agent using the knowledge base
   const propFirmAgent = new Agent({
-    name: "PropFirm Support Agent",
+    name: "Traddoo Support",
     role: AgentRole.ASSISTANT,
     personality: {
-      traits: ["helpful", "knowledgeable", "professional"],
+      traits: ["helpful", "knowledgeable", "professional", "patient"],
       background: "A customer support specialist for Traddoo, a proprietary trading firm specializing in futures evaluations and funding.",
       voice: "Professional, friendly, and informative. Provides clear explanations and accurate information about prop trading evaluations, funding, and policies."
     },
@@ -116,108 +121,160 @@ async function main() {
       "Provide accurate information about the prop trading firm's policies and procedures",
       "Help customers understand the evaluation process and requirements",
       "Answer questions about funded accounts and payouts",
-      "Assist potential and existing traders with their inquiries"
+      "Assist potential and existing traders with their inquiries",
+      "Respond promptly and professionally to all Discord messages"
     ],
     knowledgeBase: kb,
-    knowledgeBaseMaxResults: 3,
+    knowledgeBaseMaxResults: 5,
     knowledgeBaseThreshold: 0.65
   });
 
-  // Add terminal colors
-  const colors = {
-    reset: "\x1b[0m",
-    bright: "\x1b[1m",
-    dim: "\x1b[2m",
-    underscore: "\x1b[4m",
-    blink: "\x1b[5m",
-    reverse: "\x1b[7m",
-    hidden: "\x1b[8m",
-    // Foreground colors
-    fg: {
-      black: "\x1b[30m",
-      red: "\x1b[31m",
-      green: "\x1b[32m",
-      yellow: "\x1b[33m",
-      blue: "\x1b[34m",
-      magenta: "\x1b[35m",
-      cyan: "\x1b[36m",
-      white: "\x1b[37m",
-    },
-    // Background colors
-    bg: {
-      black: "\x1b[40m",
-      red: "\x1b[41m",
-      green: "\x1b[42m",
-      yellow: "\x1b[43m",
-      blue: "\x1b[44m",
-      magenta: "\x1b[45m",
-      cyan: "\x1b[46m",
-      white: "\x1b[47m",
-    }
-  };
+  // Define keywords to monitor for in Discord messages
+  const monitorKeywords = [
+    "evaluation", "challenge", "profit target", "drawdown", "payout",
+    "funded account", "trading rules", "prop firm", "trading account",
+    "reset", "refund", "scaling", "commission", "fee", "traddoo help"
+  ];
 
-  // Interactive query mode
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout
+  // Create Discord connector
+  const discord = new DiscordConnector({
+    token: process.env.DISCORD_BOT_TOKEN!,
+    prefix: '!trader',
+    autoReply: false, // We'll handle replies ourselves to avoid permission issues
+    monitorKeywords: monitorKeywords,
+    pollInterval: 60000, // Check every minute
+    // Optional: Add allowed channels or users if you want to restrict usage
+    allowedChannels: process.env.ALLOWED_CHANNELS?.split(',') || [],
   });
 
-  console.log(`\n${colors.bright}${colors.fg.cyan}===== Traddoo Support Agent =====${colors.reset}`);
-  console.log(`${colors.fg.yellow}Ask me anything about our prop trading firm (type "exit" to quit)${colors.reset}`);
-  console.log(`${colors.fg.yellow}Example questions:${colors.reset}`);
-  console.log(`${colors.fg.yellow}- What instruments can I trade?${colors.reset}`);
-  console.log(`${colors.fg.yellow}- Is there a time limit for evaluations?${colors.reset}`);
-  console.log(`${colors.fg.yellow}- How is drawdown calculated?${colors.reset}`);
-  console.log(`${colors.fg.yellow}- What is your profit split?${colors.reset}`);
+  // Add error event handler to catch connector-level errors
+  discord.on('error', (error) => {
+    console.error('Discord connector error:', error.message);
+  });
 
-  const askQuestion = () => {
-    rl.question(`\n${colors.bright}${colors.fg.green}Question: ${colors.reset}`, async (query) => {
-      if (query.toLowerCase() === 'exit') {
-        rl.close();
-        return;
-      }
-
-      try {
-        // First show raw knowledge base results for demonstration
-        console.log(`\n${colors.fg.cyan}Searching knowledge base...${colors.reset}`);
-        const results = await kb.query(query, {
-          maxResults: 3,
-          relevanceThreshold: 0.65
-        });
-
-        console.log(`\n${colors.fg.cyan}Found ${results.entries.length} relevant items:${colors.reset}`);
-        
-        for (let i = 0; i < results.entries.length; i++) {
-          const entry = results.entries[i];
-          const score = results.relevanceScores.get(entry.id) || 0;
-          
-          if ('question' in entry) {
-            console.log(`\n${colors.fg.white}${i+1}. FAQ: "${colors.bright}${entry.question}${colors.reset}${colors.fg.white}" (relevance: ${score.toFixed(2)})${colors.reset}`);
-            console.log(`${colors.fg.white}   Category: ${entry.category}${colors.reset}`);
-          } else {
-            console.log(`\n${colors.fg.white}${i+1}. Document: "${colors.bright}${entry.title}${colors.reset}${colors.fg.white}" (relevance: ${score.toFixed(2)})${colors.reset}`);
-            console.log(`${colors.fg.white}   Category: ${entry.category}${colors.reset}`);
-          }
+  // Set up event handlers for Discord connector
+  discord.on('mention', async (message) => {
+    console.log(`Bot was mentioned by ${message.author.username} in message: "${message.content}"`);
+    
+    // Handle this message in addition to the automatic handling
+  // This is a proactive approach to handle permission issues
+  try {
+    // Generate response regardless if auto-reply worked or not
+    const result = await propFirmAgent.run({
+      task: `Respond to this Discord message from @${message.author.username}: "${message.content}"`,
+      conversation: {
+        id: `discord-${message.id}`,
+        messages: [],
+        created: Date.now(),
+        updated: Date.now(),
+        metadata: {
+          channelId: message.channelId,
+          author: message.author
         }
-
-        // Generate agent response
-        console.log(`\n${colors.fg.cyan}Generating response...${colors.reset}`);
-        const result = await propFirmAgent.run({
-          task: query
-        });
-
-        console.log(`\n${colors.bright}${colors.fg.blue}PropFirm Support Agent:${colors.reset}`);
-        console.log(`${colors.fg.cyan}${result.response}${colors.reset}`);
-
-        askQuestion();
-      } catch (error) {
-        console.error(`${colors.fg.red}Error:${colors.reset}`, error);
-        askQuestion();
       }
     });
-  };
 
-  askQuestion();
+    // Try to send a new message as a fallback (not a reply)
+    try {
+      await discord.sendMessage(
+        message.channelId,
+        `@${message.author.username} ${result.response}`
+      );
+      console.log('Successfully sent response as a new message');
+    } catch (messageError) {
+      console.error('Failed to send even a regular message:', messageError);
+    }
+  } catch (error) {
+    console.error('Failed to process mention:', error);
+  }
+  });
+
+  discord.on('keyword_match', async (message) => {
+    console.log(`Keyword match detected in message from ${message.author.username}: "${message.content}"`);
+    
+    // Handle this message in addition to the automatic handling
+    // This is a proactive approach to handle permission issues
+    try {
+      // Extract the keywords that matched
+      const matchedKeywords = monitorKeywords.filter(keyword => 
+        message.content.toLowerCase().includes(keyword.toLowerCase())
+      );
+      
+      // Run the agent to get a response
+      const result = await propFirmAgent.run({
+        task: `Respond to this Discord message containing keywords [${matchedKeywords.join(', ')}] from @${message.author.username}: "${message.content}"`,
+        conversation: {
+          id: `discord-kw-${message.id}`,
+          messages: [],
+          created: Date.now(),
+          updated: Date.now(),
+          metadata: {
+            channelId: message.channelId,
+            author: message.author,
+            keywords: matchedKeywords
+          }
+        }
+      });
+
+      // Try to send a new message (not a reply)
+      try {
+        // Wait a bit to avoid race conditions with auto-reply
+        setTimeout(async () => {
+          try {
+            await discord.sendMessage(
+              message.channelId,
+              `@${message.author.username} I noticed you mentioned ${matchedKeywords.join(', ')}. ${result.response}`
+            );
+            console.log('Successfully sent keyword response as a new message');
+          } catch (sendError) {
+            console.error('Failed to send keyword response message:', sendError);
+          }
+        }, 1000); // 1 second delay
+      } catch (messageError) {
+        console.error('Failed to schedule keyword response:', messageError);
+      }
+    } catch (error) {
+      console.error('Failed to process keyword match:', error);
+    }
+  });
+
+  // Connect agent to Discord
+  try {
+    await discord.connect(propFirmAgent);
+    console.log(`Successfully connected to Discord!`);
+    
+    // Set bot status
+    await discord.setStatus('online', 'WATCHING', 'for trading questions');
+    
+    // Get connected guilds (for information)
+    const guilds = await discord.getGuilds();
+    console.log(`Connected to ${guilds.length} Discord servers:`);
+    guilds.forEach(guild => {
+      console.log(`- ${guild.name} (${guild.id}) with ${guild.memberCount || 'unknown'} members`);
+    });
+
+    console.log('\nBot is now running and ready to answer questions!');
+    console.log('Available commands:');
+    console.log('  !trader ask <question> - Ask a specific question to the bot');
+    console.log('  !trader help - Show help information');
+    console.log('The bot will also respond automatically to:');
+    console.log('  - Direct mentions (@Traddoo Support)');
+    console.log('  - Messages containing keywords about trading and prop firms');
+
+    // Keep the process running
+    process.on('SIGINT', async () => {
+      console.log('Shutting down...');
+      await discord.disconnect();
+      process.exit(0);
+    });
+
+  } catch (error) {
+    console.error('Error connecting to Discord:', error);
+    process.exit(1);
+  }
 }
 
-main().catch(console.error);
+main().catch(error => {
+  console.error('Unhandled error:', error);
+  process.exit(1);
+});
