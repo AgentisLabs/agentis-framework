@@ -1,0 +1,457 @@
+{
+  "nodes": [
+    {
+      "id": "6a348dd2-3b90-4586-9bd6-c9d3d3bdeb7f",
+      "type": "faq",
+      "label": "What is the knowledge base chunking feature?",
+      "properties": {
+        "id": "5ea0e64d-eb4d-4258-8023-b8f05fe64918",
+        "answer": "The knowledge base chunking feature splits large documents into smaller chunks for better retrieval. It allows for more precise information retrieval from large documents by matching relevant chunks rather than entire documents.",
+        "category": "Features",
+        "tags": "Knowledge Base,Chunking,Retrieval"
+      },
+      "createdAt": "2025-03-09T18:37:46.892Z",
+      "updatedAt": "2025-03-09T18:37:46.892Z"
+    },
+    {
+      "id": "b0a99511-9b30-4247-b61d-0ff920faaaf8",
+      "type": "category",
+      "label": "Features",
+      "properties": {},
+      "createdAt": "2025-03-09T18:37:46.892Z",
+      "updatedAt": "2025-03-09T18:37:46.892Z"
+    },
+    {
+      "id": "28ce72c6-e8a1-48b2-9e9b-7b49948629bb",
+      "type": "tag",
+      "label": "Knowledge Base",
+      "properties": {},
+      "createdAt": "2025-03-09T18:37:46.892Z",
+      "updatedAt": "2025-03-09T18:37:46.892Z"
+    },
+    {
+      "id": "f6279638-22b0-4605-ba9a-62e8abc81f1c",
+      "type": "tag",
+      "label": "Chunking",
+      "properties": {},
+      "createdAt": "2025-03-09T18:37:46.892Z",
+      "updatedAt": "2025-03-09T18:37:46.892Z"
+    },
+    {
+      "id": "c5721ef7-5b74-44b7-ba0e-9fed86c7ec70",
+      "type": "tag",
+      "label": "Retrieval",
+      "properties": {},
+      "createdAt": "2025-03-09T18:37:46.892Z",
+      "updatedAt": "2025-03-09T18:37:46.892Z"
+    },
+    {
+      "id": "0cb760cb-9a3e-47bb-96c3-7ceee3f9ce18",
+      "type": "faq",
+      "label": "How does chunking improve information retrieval?",
+      "properties": {
+        "id": "d0f4c47e-7696-46a1-a1a8-32fffc55be0f",
+        "answer": "Chunking improves information retrieval by breaking large documents into semantically meaningful sections. This allows the system to find specific information buried deep within large texts, rather than having to retrieve the entire document. It also improves relevance scoring by focusing on the specific chunks that match a query.",
+        "category": "Features",
+        "tags": "Knowledge Base,Chunking,Retrieval"
+      },
+      "createdAt": "2025-03-09T18:37:46.892Z",
+      "updatedAt": "2025-03-09T18:37:46.892Z"
+    },
+    {
+      "id": "f54263ff-ffb9-4302-b309-91a75acc9158",
+      "type": "faq",
+      "label": "What's the difference between FAQ and document retrieval?",
+      "properties": {
+        "id": "6d489ad0-4cde-43f9-9f56-5f4470b84ddc",
+        "answer": "FAQ retrieval is designed for direct question-answer pairs, while document retrieval is for longer-form content. FAQs are best for specific, commonly asked questions with concise answers. Document retrieval (with chunking) is better for detailed information extraction from longer texts like articles, reports, or books.",
+        "category": "Usage",
+        "tags": "FAQ,Documents,Retrieval"
+      },
+      "createdAt": "2025-03-09T18:37:46.892Z",
+      "updatedAt": "2025-03-09T18:37:46.892Z"
+    },
+    {
+      "id": "2aa7a736-b4bc-437e-863c-ea36e29dc6f9",
+      "type": "category",
+      "label": "Usage",
+      "properties": {},
+      "createdAt": "2025-03-09T18:37:46.892Z",
+      "updatedAt": "2025-03-09T18:37:46.892Z"
+    },
+    {
+      "id": "d6796079-a9a1-4e02-b379-c5efa73854c4",
+      "type": "tag",
+      "label": "FAQ",
+      "properties": {},
+      "createdAt": "2025-03-09T18:37:46.892Z",
+      "updatedAt": "2025-03-09T18:37:46.892Z"
+    },
+    {
+      "id": "5859709b-2088-4c06-a8a3-6c491521e11c",
+      "type": "tag",
+      "label": "Documents",
+      "properties": {},
+      "createdAt": "2025-03-09T18:37:46.892Z",
+      "updatedAt": "2025-03-09T18:37:46.892Z"
+    },
+    {
+      "id": "217dac3a-433f-4681-8f95-e0645fa66ea0",
+      "type": "document",
+      "label": "A Comprehensive History of Artificial Intelligence",
+      "properties": {
+        "id": "3f889187-e92f-461b-8451-81d9999dcc06",
+        "category": "Technology",
+        "tags": "AI,History,Computing"
+      },
+      "createdAt": "2025-03-09T18:37:46.892Z",
+      "updatedAt": "2025-03-09T18:37:46.892Z"
+    },
+    {
+      "id": "57040d5f-528e-4ab9-9535-b3a1bacf43b6",
+      "type": "category",
+      "label": "Technology",
+      "properties": {},
+      "createdAt": "2025-03-09T18:37:46.893Z",
+      "updatedAt": "2025-03-09T18:37:46.893Z"
+    },
+    {
+      "id": "27094cd1-63ba-47b6-8a52-bf6e75db848e",
+      "type": "tag",
+      "label": "AI",
+      "properties": {},
+      "createdAt": "2025-03-09T18:37:46.893Z",
+      "updatedAt": "2025-03-09T18:37:46.893Z"
+    },
+    {
+      "id": "ab9dfc8b-9865-4b97-add9-c1bdcefe29ef",
+      "type": "tag",
+      "label": "History",
+      "properties": {},
+      "createdAt": "2025-03-09T18:37:46.893Z",
+      "updatedAt": "2025-03-09T18:37:46.893Z"
+    },
+    {
+      "id": "18b46fbb-9577-4b19-b882-1665465fa5aa",
+      "type": "tag",
+      "label": "Computing",
+      "properties": {},
+      "createdAt": "2025-03-09T18:37:46.893Z",
+      "updatedAt": "2025-03-09T18:37:46.893Z"
+    },
+    {
+      "id": "9bf4b48d-6b1b-45ab-8912-0bf72af6dd72",
+      "type": "document",
+      "label": "Understanding Climate Change: Causes and Effects",
+      "properties": {
+        "id": "f20efc49-918d-4d8f-b9ef-2e2502f676f3",
+        "category": "Environment",
+        "tags": "Climate,Science,Global Warming"
+      },
+      "createdAt": "2025-03-09T18:37:46.893Z",
+      "updatedAt": "2025-03-09T18:37:46.893Z"
+    },
+    {
+      "id": "8875b9c9-b8dd-40c2-9150-f3d9ef4e9f91",
+      "type": "category",
+      "label": "Environment",
+      "properties": {},
+      "createdAt": "2025-03-09T18:37:46.893Z",
+      "updatedAt": "2025-03-09T18:37:46.893Z"
+    },
+    {
+      "id": "25b5339d-0dfe-44a8-8401-60c43166de27",
+      "type": "tag",
+      "label": "Climate",
+      "properties": {},
+      "createdAt": "2025-03-09T18:37:46.893Z",
+      "updatedAt": "2025-03-09T18:37:46.893Z"
+    },
+    {
+      "id": "f1ea8e07-375b-4a23-8536-533110d3b688",
+      "type": "tag",
+      "label": "Science",
+      "properties": {},
+      "createdAt": "2025-03-09T18:37:46.893Z",
+      "updatedAt": "2025-03-09T18:37:46.893Z"
+    },
+    {
+      "id": "2b7ef851-99b7-4053-9ccd-67ac5e2ee9d2",
+      "type": "tag",
+      "label": "Global Warming",
+      "properties": {},
+      "createdAt": "2025-03-09T18:37:46.893Z",
+      "updatedAt": "2025-03-09T18:37:46.893Z"
+    },
+    {
+      "id": "564dace0-3feb-44ab-836f-d37be2d08819",
+      "type": "document",
+      "label": "Introduction to Quantum Computing",
+      "properties": {
+        "id": "fbc91eb9-ead1-4e72-835f-4955623fd368",
+        "category": "Technology",
+        "tags": "Quantum,Computing,Physics"
+      },
+      "createdAt": "2025-03-09T18:37:46.893Z",
+      "updatedAt": "2025-03-09T18:37:46.893Z"
+    },
+    {
+      "id": "9cc80cce-a983-4767-aa9b-bfb28306896e",
+      "type": "tag",
+      "label": "Quantum",
+      "properties": {},
+      "createdAt": "2025-03-09T18:37:46.893Z",
+      "updatedAt": "2025-03-09T18:37:46.893Z"
+    },
+    {
+      "id": "98cc6cc1-aca9-4ead-b087-798c7a9e41c3",
+      "type": "tag",
+      "label": "Physics",
+      "properties": {},
+      "createdAt": "2025-03-09T18:37:46.893Z",
+      "updatedAt": "2025-03-09T18:37:46.893Z"
+    }
+  ],
+  "relationships": [
+    {
+      "id": "958f8921-fbf5-44f7-97d2-4386541c841c",
+      "type": "belongs_to",
+      "sourceId": "6a348dd2-3b90-4586-9bd6-c9d3d3bdeb7f",
+      "targetId": "b0a99511-9b30-4247-b61d-0ff920faaaf8",
+      "properties": {},
+      "weight": 1,
+      "createdAt": "2025-03-09T18:37:46.892Z",
+      "updatedAt": "2025-03-09T18:37:46.892Z"
+    },
+    {
+      "id": "195ea61b-218b-492a-9c84-6c4ba703358a",
+      "type": "tagged_with",
+      "sourceId": "6a348dd2-3b90-4586-9bd6-c9d3d3bdeb7f",
+      "targetId": "28ce72c6-e8a1-48b2-9e9b-7b49948629bb",
+      "properties": {},
+      "weight": 1,
+      "createdAt": "2025-03-09T18:37:46.892Z",
+      "updatedAt": "2025-03-09T18:37:46.892Z"
+    },
+    {
+      "id": "e4024317-927e-4494-aa24-2382f5fbce35",
+      "type": "tagged_with",
+      "sourceId": "6a348dd2-3b90-4586-9bd6-c9d3d3bdeb7f",
+      "targetId": "f6279638-22b0-4605-ba9a-62e8abc81f1c",
+      "properties": {},
+      "weight": 1,
+      "createdAt": "2025-03-09T18:37:46.892Z",
+      "updatedAt": "2025-03-09T18:37:46.892Z"
+    },
+    {
+      "id": "d8c687e6-a2cd-4081-97de-65cb78e699d8",
+      "type": "tagged_with",
+      "sourceId": "6a348dd2-3b90-4586-9bd6-c9d3d3bdeb7f",
+      "targetId": "c5721ef7-5b74-44b7-ba0e-9fed86c7ec70",
+      "properties": {},
+      "weight": 1,
+      "createdAt": "2025-03-09T18:37:46.892Z",
+      "updatedAt": "2025-03-09T18:37:46.892Z"
+    },
+    {
+      "id": "3bf89474-9973-4bb0-ab78-5a975823476f",
+      "type": "belongs_to",
+      "sourceId": "0cb760cb-9a3e-47bb-96c3-7ceee3f9ce18",
+      "targetId": "b0a99511-9b30-4247-b61d-0ff920faaaf8",
+      "properties": {},
+      "weight": 1,
+      "createdAt": "2025-03-09T18:37:46.892Z",
+      "updatedAt": "2025-03-09T18:37:46.892Z"
+    },
+    {
+      "id": "5b8a5785-8172-415d-8de1-bdf6ceb61f90",
+      "type": "tagged_with",
+      "sourceId": "0cb760cb-9a3e-47bb-96c3-7ceee3f9ce18",
+      "targetId": "28ce72c6-e8a1-48b2-9e9b-7b49948629bb",
+      "properties": {},
+      "weight": 1,
+      "createdAt": "2025-03-09T18:37:46.892Z",
+      "updatedAt": "2025-03-09T18:37:46.892Z"
+    },
+    {
+      "id": "23e5203d-a39c-44e9-ae2d-a276750ae252",
+      "type": "tagged_with",
+      "sourceId": "0cb760cb-9a3e-47bb-96c3-7ceee3f9ce18",
+      "targetId": "f6279638-22b0-4605-ba9a-62e8abc81f1c",
+      "properties": {},
+      "weight": 1,
+      "createdAt": "2025-03-09T18:37:46.892Z",
+      "updatedAt": "2025-03-09T18:37:46.892Z"
+    },
+    {
+      "id": "39aa6596-9653-4c85-ba3d-6fe2260a4335",
+      "type": "tagged_with",
+      "sourceId": "0cb760cb-9a3e-47bb-96c3-7ceee3f9ce18",
+      "targetId": "c5721ef7-5b74-44b7-ba0e-9fed86c7ec70",
+      "properties": {},
+      "weight": 1,
+      "createdAt": "2025-03-09T18:37:46.892Z",
+      "updatedAt": "2025-03-09T18:37:46.892Z"
+    },
+    {
+      "id": "4648e975-39ba-4a05-bf2c-66225826296a",
+      "type": "belongs_to",
+      "sourceId": "f54263ff-ffb9-4302-b309-91a75acc9158",
+      "targetId": "2aa7a736-b4bc-437e-863c-ea36e29dc6f9",
+      "properties": {},
+      "weight": 1,
+      "createdAt": "2025-03-09T18:37:46.892Z",
+      "updatedAt": "2025-03-09T18:37:46.892Z"
+    },
+    {
+      "id": "a069da69-f2e5-49fe-b620-737e16ff1e0c",
+      "type": "tagged_with",
+      "sourceId": "f54263ff-ffb9-4302-b309-91a75acc9158",
+      "targetId": "d6796079-a9a1-4e02-b379-c5efa73854c4",
+      "properties": {},
+      "weight": 1,
+      "createdAt": "2025-03-09T18:37:46.892Z",
+      "updatedAt": "2025-03-09T18:37:46.892Z"
+    },
+    {
+      "id": "34580316-304c-4cd9-b3ae-a9f089c864b8",
+      "type": "tagged_with",
+      "sourceId": "f54263ff-ffb9-4302-b309-91a75acc9158",
+      "targetId": "5859709b-2088-4c06-a8a3-6c491521e11c",
+      "properties": {},
+      "weight": 1,
+      "createdAt": "2025-03-09T18:37:46.892Z",
+      "updatedAt": "2025-03-09T18:37:46.892Z"
+    },
+    {
+      "id": "e1b87062-3f8b-480f-9cdc-f786c79f17da",
+      "type": "tagged_with",
+      "sourceId": "f54263ff-ffb9-4302-b309-91a75acc9158",
+      "targetId": "c5721ef7-5b74-44b7-ba0e-9fed86c7ec70",
+      "properties": {},
+      "weight": 1,
+      "createdAt": "2025-03-09T18:37:46.892Z",
+      "updatedAt": "2025-03-09T18:37:46.892Z"
+    },
+    {
+      "id": "1a27af16-63d4-4434-9bac-1f145bae9d6d",
+      "type": "belongs_to",
+      "sourceId": "217dac3a-433f-4681-8f95-e0645fa66ea0",
+      "targetId": "57040d5f-528e-4ab9-9535-b3a1bacf43b6",
+      "properties": {},
+      "weight": 1,
+      "createdAt": "2025-03-09T18:37:46.893Z",
+      "updatedAt": "2025-03-09T18:37:46.893Z"
+    },
+    {
+      "id": "b95eab7a-9874-41c3-9596-e03f220db568",
+      "type": "tagged_with",
+      "sourceId": "217dac3a-433f-4681-8f95-e0645fa66ea0",
+      "targetId": "27094cd1-63ba-47b6-8a52-bf6e75db848e",
+      "properties": {},
+      "weight": 1,
+      "createdAt": "2025-03-09T18:37:46.893Z",
+      "updatedAt": "2025-03-09T18:37:46.893Z"
+    },
+    {
+      "id": "2a286f7d-a344-4254-b576-1d295325035a",
+      "type": "tagged_with",
+      "sourceId": "217dac3a-433f-4681-8f95-e0645fa66ea0",
+      "targetId": "ab9dfc8b-9865-4b97-add9-c1bdcefe29ef",
+      "properties": {},
+      "weight": 1,
+      "createdAt": "2025-03-09T18:37:46.893Z",
+      "updatedAt": "2025-03-09T18:37:46.893Z"
+    },
+    {
+      "id": "167f0e37-cdda-40ec-81b8-f69a0dc6c821",
+      "type": "tagged_with",
+      "sourceId": "217dac3a-433f-4681-8f95-e0645fa66ea0",
+      "targetId": "18b46fbb-9577-4b19-b882-1665465fa5aa",
+      "properties": {},
+      "weight": 1,
+      "createdAt": "2025-03-09T18:37:46.893Z",
+      "updatedAt": "2025-03-09T18:37:46.893Z"
+    },
+    {
+      "id": "0d6cd2d6-ed99-4e17-8a46-cbe26387aee1",
+      "type": "belongs_to",
+      "sourceId": "9bf4b48d-6b1b-45ab-8912-0bf72af6dd72",
+      "targetId": "8875b9c9-b8dd-40c2-9150-f3d9ef4e9f91",
+      "properties": {},
+      "weight": 1,
+      "createdAt": "2025-03-09T18:37:46.893Z",
+      "updatedAt": "2025-03-09T18:37:46.893Z"
+    },
+    {
+      "id": "014ab7ef-e4de-44f8-8437-8d264bb7d38a",
+      "type": "tagged_with",
+      "sourceId": "9bf4b48d-6b1b-45ab-8912-0bf72af6dd72",
+      "targetId": "25b5339d-0dfe-44a8-8401-60c43166de27",
+      "properties": {},
+      "weight": 1,
+      "createdAt": "2025-03-09T18:37:46.893Z",
+      "updatedAt": "2025-03-09T18:37:46.893Z"
+    },
+    {
+      "id": "d0a93447-fd37-401b-bcc9-02a2ac1e118b",
+      "type": "tagged_with",
+      "sourceId": "9bf4b48d-6b1b-45ab-8912-0bf72af6dd72",
+      "targetId": "f1ea8e07-375b-4a23-8536-533110d3b688",
+      "properties": {},
+      "weight": 1,
+      "createdAt": "2025-03-09T18:37:46.893Z",
+      "updatedAt": "2025-03-09T18:37:46.893Z"
+    },
+    {
+      "id": "f9c0decb-00ba-4f35-ac95-182e0a873d6b",
+      "type": "tagged_with",
+      "sourceId": "9bf4b48d-6b1b-45ab-8912-0bf72af6dd72",
+      "targetId": "2b7ef851-99b7-4053-9ccd-67ac5e2ee9d2",
+      "properties": {},
+      "weight": 1,
+      "createdAt": "2025-03-09T18:37:46.893Z",
+      "updatedAt": "2025-03-09T18:37:46.893Z"
+    },
+    {
+      "id": "b2068fe4-59aa-439c-acc6-018bc801bb36",
+      "type": "belongs_to",
+      "sourceId": "564dace0-3feb-44ab-836f-d37be2d08819",
+      "targetId": "57040d5f-528e-4ab9-9535-b3a1bacf43b6",
+      "properties": {},
+      "weight": 1,
+      "createdAt": "2025-03-09T18:37:46.893Z",
+      "updatedAt": "2025-03-09T18:37:46.893Z"
+    },
+    {
+      "id": "e77140c3-df49-4514-9765-cf81b7d20d63",
+      "type": "tagged_with",
+      "sourceId": "564dace0-3feb-44ab-836f-d37be2d08819",
+      "targetId": "9cc80cce-a983-4767-aa9b-bfb28306896e",
+      "properties": {},
+      "weight": 1,
+      "createdAt": "2025-03-09T18:37:46.893Z",
+      "updatedAt": "2025-03-09T18:37:46.893Z"
+    },
+    {
+      "id": "5090d0c5-6e13-4245-b890-72fa2c03f8c7",
+      "type": "tagged_with",
+      "sourceId": "564dace0-3feb-44ab-836f-d37be2d08819",
+      "targetId": "18b46fbb-9577-4b19-b882-1665465fa5aa",
+      "properties": {},
+      "weight": 1,
+      "createdAt": "2025-03-09T18:37:46.893Z",
+      "updatedAt": "2025-03-09T18:37:46.893Z"
+    },
+    {
+      "id": "808a85f8-33d4-48fc-977d-8397a41acc94",
+      "type": "tagged_with",
+      "sourceId": "564dace0-3feb-44ab-836f-d37be2d08819",
+      "targetId": "98cc6cc1-aca9-4ead-b087-798c7a9e41c3",
+      "properties": {},
+      "weight": 1,
+      "createdAt": "2025-03-09T18:37:46.893Z",
+      "updatedAt": "2025-03-09T18:37:46.893Z"
+    }
+  ]
+}

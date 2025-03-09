@@ -15,7 +15,8 @@
     "lint": "eslint 'src/**/*.{js,ts}'",
     "format": "prettier --write 'src/**/*.{js,ts}'",
     "prepublishOnly": "npm run build",
-    "example": "ts-node examples/discord-crypto-researcher-bot.ts"
+    "example": "ts-node examples/discord-crypto-researcher-bot.ts",
+    "test-kb": "ts-node scripts/test-knowledge-chunks.ts"
   },
   "keywords": [
     "ai",
