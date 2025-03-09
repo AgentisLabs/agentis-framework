@@ -16,7 +16,9 @@
     "format": "prettier --write 'src/**/*.{js,ts}'",
     "prepublishOnly": "npm run build",
     "example": "ts-node examples/discord-crypto-researcher-bot.ts",
-    "test-kb": "ts-node scripts/test-knowledge-chunks.ts"
+    "test-kb": "ts-node scripts/test-knowledge-chunks.ts",
+    "test-brave": "ts-node scripts/test-brave-search.ts",
+    "goal-agent": "ts-node examples/autonomous-goal-agent.ts"
   },
   "keywords": [
     "ai",
@@ -51,6 +53,7 @@
     "axios": "^1.8.1",
     "discord.js": "^14.18.0",
     "dotenv": "^16.4.7",
+    "node-fetch": "^2.6.7",
     "openai": "^4.85.4",
     "puppeteer": "^24.3.0",
     "ts-node": "^10.9.2",
@@ -59,6 +62,7 @@
   },
   "devDependencies": {
     "@types/dotenv": "^6.1.1",
+    "@types/node-fetch": "^2.6.4",
     "@types/puppeteer": "^5.4.7",
     "@types/uuid": "^10.0.0",
     "nodemon": "^3.1.9",

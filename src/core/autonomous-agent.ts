@@ -1,13 +1,17 @@
 /**
  * Autonomous Agent - provides self-management capabilities for continuously running agents
  * Handles background processing, self-monitoring, and recovery mechanisms
+ * Enhanced with goal planning and execution capabilities
  */
 
 import { Agent } from './agent';
+import { Tool } from './types';
 import { Logger } from '../utils/logger';
 import { EventEmitter } from 'events';
 import path from 'path';
 import fs from 'fs';
+import { v4 as uuidv4 } from 'uuid';
+import { GoalPlanner, GoalType, Goal, GoalResult, GoalTask, GoalStatus } from '../planning/goal-planner';
 
 /**
  * Configuration for the autonomous agent
@@ -28,6 +32,20 @@ export interface AutonomousAgentConfig {
   
   // Continuous operation
   enableContinuousMode?: boolean;
+  
+  // Goal planning configuration
+  goalPlanning?: {
+    enabled: boolean;
+    maxSubgoals?: number;
+    maxTasksPerGoal?: number;
+    reflectionFrequency?: number;
+    adaptivePlanning?: boolean;
+    defaultPriority?: number;
+    defaultDeadlineDays?: number;
+    maxConcurrentGoals?: number;
+    persistGoals?: boolean;
+    goalsStoragePath?: string;
+  };
 }
 
 /**
@@ -44,6 +62,23 @@ interface AgentState {
 }
 
 /**
+ * Options for running a goal
+ */
+export interface RunGoalOptions {
+  tools?: Tool[];
+  maxReflections?: number;
+  reflectAfterTaskCount?: number;
+  stopOnFailure?: boolean;
+  onProgress?: (progress: {
+    goalId: string;
+    subGoalId?: string;
+    taskId?: string;
+    message: string;
+    progress: number;
+  }) => void;
+}
+
+/**
  * Autonomous Agent that enhances a standard agent with self-management capabilities
  */
 export class AutonomousAgent extends EventEmitter {
@@ -56,6 +91,12 @@ export class AutonomousAgent extends EventEmitter {
   private operationQueue: Array<() => Promise<void>> = [];
   private processingQueue: boolean = false;
   private running: boolean = false;
+  
+  // Goal planning
+  private goalPlanner: GoalPlanner | null = null;
+  private goalsFilePath: string = '';
+  private activeGoals: Set<string> = new Set();
+  private recurringGoalTimers: Map<string, NodeJS.Timeout> = new Map();
   
   /**
    * Creates a new autonomous agent
@@ -89,6 +130,51 @@ export class AutonomousAgent extends EventEmitter {
     
     // Initialize or load state
     this.state = this.loadState();
+    
+    // Initialize goal planning if enabled
+    if (this.config.goalPlanning?.enabled) {
+      this.setupGoalPlanning(agentName);
+    }
+  }
+  
+  /**
+   * Sets up goal planning capabilities
+   * 
+   * @param agentName - The name of the agent for file naming
+   */
+  private setupGoalPlanning(agentName: string): void {
+    const goalConfig = this.config.goalPlanning!;
+    
+    this.logger.info('Initializing goal planning capabilities');
+    
+    // Create the goal planner
+    this.goalPlanner = new GoalPlanner({
+      maxSubgoals: goalConfig.maxSubgoals,
+      maxTasksPerGoal: goalConfig.maxTasksPerGoal,
+      reflectionFrequency: goalConfig.reflectionFrequency,
+      adaptivePlanning: goalConfig.adaptivePlanning,
+      defaultPriority: goalConfig.defaultPriority,
+      defaultDeadlineDays: goalConfig.defaultDeadlineDays
+    });
+    
+    // Connect the agent to the goal planner
+    this.goalPlanner.connectAgent(this.agent);
+    
+    // Set up goals storage if persistence is enabled
+    if (goalConfig.persistGoals) {
+      const goalsDir = goalConfig.goalsStoragePath || 
+                      this.config.stateStoragePath || 
+                      path.join(process.cwd(), 'data', 'agent-goals');
+                      
+      if (!fs.existsSync(goalsDir)) {
+        fs.mkdirSync(goalsDir, { recursive: true });
+      }
+      
+      this.goalsFilePath = path.join(goalsDir, `${agentName.toLowerCase()}-goals.json`);
+      
+      // Load saved goals
+      this.loadGoals();
+    }
   }
   
   /**
@@ -135,8 +221,19 @@ export class AutonomousAgent extends EventEmitter {
       this.healthCheckInterval = null;
     }
     
+    // Clear recurring goal timers
+    for (const [goalId, timer] of this.recurringGoalTimers.entries()) {
+      clearInterval(timer);
+    }
+    this.recurringGoalTimers.clear();
+    
     // Save final state
     this.saveState();
+    
+    // Save goals if enabled
+    if (this.config.goalPlanning?.enabled && this.config.goalPlanning.persistGoals) {
+      this.saveGoals();
+    }
     
     this.emit('stopped');
   }
@@ -365,6 +462,14 @@ export class AutonomousAgent extends EventEmitter {
       failed: number;
       successRate: number;
     };
+    goals?: {
+      total: number;
+      active: number;
+      completed: number;
+      failed: number;
+      pending: number;
+      recurring: number;
+    };
   } {
     const uptimeMs = Date.now() - this.state.sessionStartTime;
     const uptimeHours = uptimeMs / (1000 * 60 * 60);
@@ -372,7 +477,27 @@ export class AutonomousAgent extends EventEmitter {
     // Extract the agent name
     const agentName = (this.agent as any).name || 'autonomous-agent';
     
-    return {
+    const status: {
+      name: string;
+      running: boolean;
+      lastActive: Date;
+      uptime: number;
+      queueLength: number;
+      operations: {
+        total: number;
+        successful: number;
+        failed: number;
+        successRate: number;
+      };
+      goals?: {
+        total: number;
+        active: number;
+        completed: number;
+        failed: number;
+        pending: number;
+        recurring: number;
+      };
+    } = {
       name: agentName,
       running: this.running,
       lastActive: new Date(this.state.lastActive),
@@ -387,5 +512,493 @@ export class AutonomousAgent extends EventEmitter {
           : 0
       }
     };
+    
+    // Add goal statistics if goal planning is enabled
+    if (this.goalPlanner) {
+      const goals = this.goalPlanner.getGoals();
+      
+      status.goals = {
+        total: goals.length,
+        active: this.activeGoals.size,
+        completed: goals.filter(g => g.status === GoalStatus.COMPLETED).length,
+        failed: goals.filter(g => g.status === GoalStatus.FAILED).length,
+        pending: goals.filter(g => g.status === GoalStatus.PENDING).length,
+        recurring: this.recurringGoalTimers.size
+      };
+    }
+    
+    return status;
+  }
+  
+  /**
+   * Creates a new goal for the agent to work towards
+   * 
+   * @param description - Description of the goal
+   * @param options - Additional goal options
+   * @returns The created goal
+   */
+  public async createGoal(
+    description: string,
+    options: {
+      type?: GoalType;
+      successCriteria?: string[];
+      priority?: number;
+      deadline?: Date;
+      recurrence?: string;
+      metadata?: Record<string, any>;
+      executeImmediately?: boolean;
+      tools?: Tool[];
+    } = {}
+  ): Promise<Goal> {
+    if (!this.goalPlanner) {
+      throw new Error('Goal planning is not enabled for this agent');
+    }
+    
+    this.logger.info(`Creating new goal: ${description}`);
+    
+    const goal = await this.goalPlanner.createMainGoal(description, {
+      type: options.type,
+      successCriteria: options.successCriteria,
+      priority: options.priority,
+      deadline: options.deadline,
+      recurrence: options.recurrence,
+      metadata: options.metadata
+    });
+    
+    // Persist goals if enabled
+    if (this.config.goalPlanning?.persistGoals && this.goalsFilePath) {
+      this.saveGoals();
+    }
+    
+    // If recurrence is specified, set up a timer
+    if (options.recurrence) {
+      this.setupRecurringGoal(goal.id, options.recurrence, options.tools || []);
+    }
+    
+    // Execute immediately if requested
+    if (options.executeImmediately) {
+      this.queueOperation(async () => {
+        await this.executeGoal(goal.id, {
+          tools: options.tools
+        });
+      });
+    }
+    
+    return goal;
+  }
+  
+  /**
+   * Execute a goal
+   * 
+   * @param goalId - ID of the goal to execute
+   * @param options - Execution options
+   * @returns Promise resolving to the execution result
+   */
+  public async executeGoal(
+    goalId: string,
+    options: RunGoalOptions = {}
+  ): Promise<GoalResult> {
+    if (!this.goalPlanner) {
+      throw new Error('Goal planning is not enabled for this agent');
+    }
+    
+    const goal = this.goalPlanner.getGoal(goalId);
+    if (!goal) {
+      throw new Error(`Goal with ID ${goalId} not found`);
+    }
+    
+    // Check if the goal is already being executed
+    if (this.activeGoals.has(goalId)) {
+      throw new Error(`Goal with ID ${goalId} is already being executed`);
+    }
+    
+    // Check if we're at the concurrent goal limit
+    const maxConcurrentGoals = this.config.goalPlanning?.maxConcurrentGoals || 5;
+    if (this.activeGoals.size >= maxConcurrentGoals) {
+      throw new Error(`Maximum number of concurrent goals (${maxConcurrentGoals}) reached`);
+    }
+    
+    this.logger.info(`Executing goal: ${goal.description}`);
+    this.activeGoals.add(goalId);
+    
+    try {
+      // Set up progress tracking if callback provided
+      let progressCallback = options.onProgress;
+      if (progressCallback) {
+        const originalProgressCallback = progressCallback;
+        
+        // Wrap the original callback to include a progress percentage
+        progressCallback = (progress) => {
+          originalProgressCallback({
+            ...progress,
+            progress: this.calculateProgressPercentage(goalId, progress)
+          });
+        };
+        
+        // Report initial progress
+        progressCallback({
+          goalId,
+          message: `Starting goal execution: ${goal.description}`,
+          progress: 0
+        });
+      }
+      
+      // Execute the goal
+      const result = await this.goalPlanner.executeGoal(
+        goalId,
+        options.tools || [],
+        {
+          maxReflections: options.maxReflections,
+          reflectAfterTaskCount: options.reflectAfterTaskCount,
+          stopOnFailure: options.stopOnFailure
+        }
+      );
+      
+      // If the goal is recurring and succeeded, reset its status for next execution
+      const goalAfterExecution = this.goalPlanner.getGoal(goalId);
+      if (goalAfterExecution?.recurrence && result.success) {
+        // Reset the goal for next execution
+        await this.resetRecurringGoal(goalId);
+      }
+      
+      // Persist updated goals if enabled
+      if (this.config.goalPlanning?.persistGoals && this.goalsFilePath) {
+        this.saveGoals();
+      }
+      
+      // Final progress report
+      if (options.onProgress) {
+        options.onProgress({
+          goalId,
+          message: `Goal execution complete: ${goal.description}, Success: ${result.success}`,
+          progress: result.success ? 100 : 0
+        });
+      }
+      
+      this.logger.info(`Goal execution complete: ${goal.description}, Success: ${result.success}`);
+      return result;
+    } catch (error) {
+      this.logger.error(`Error executing goal: ${goal.description}`, error);
+      throw error;
+    } finally {
+      this.activeGoals.delete(goalId);
+    }
+  }
+  
+  /**
+   * Calculate an approximate progress percentage for a goal
+   * 
+   * @param goalId - ID of the goal
+   * @param progress - Current progress info
+   * @returns Progress percentage (0-100)
+   */
+  private calculateProgressPercentage(
+    goalId: string,
+    progress: {
+      goalId: string;
+      subGoalId?: string;
+      taskId?: string;
+      message: string;
+      progress?: number;
+    }
+  ): number {
+    if (!this.goalPlanner) return 0;
+    
+    // Get all sub-goals and tasks
+    const subGoals = this.goalPlanner.getSubGoals(goalId);
+    let tasks: GoalTask[] = [];
+    
+    for (const subGoal of subGoals) {
+      const subGoalTasks = this.goalPlanner.getTasksForGoal(subGoal.id);
+      tasks = [...tasks, ...subGoalTasks];
+    }
+    
+    // If no tasks yet, use a simpler estimation
+    if (tasks.length === 0) {
+      // If we have sub-goals but no tasks, estimate based on sub-goal status
+      if (subGoals.length > 0) {
+        const completedSubGoals = subGoals.filter(sg => 
+          sg.status === GoalStatus.COMPLETED || sg.status === GoalStatus.FAILED
+        ).length;
+        return Math.floor((completedSubGoals / subGoals.length) * 100);
+      }
+      return 5; // Default to 5% at the start
+    }
+    
+    // Calculate based on task completion
+    const completedTasks = tasks.filter(t => 
+      t.status === GoalStatus.COMPLETED || t.status === GoalStatus.FAILED
+    ).length;
+    
+    return Math.floor((completedTasks / tasks.length) * 100);
+  }
+  
+  /**
+   * Sets up a recurring goal with a timer
+   * 
+   * @param goalId - ID of the goal
+   * @param recurrencePattern - Recurrence pattern string (e.g., 'every 6 hours')
+   * @param tools - Tools available for this goal
+   */
+  private setupRecurringGoal(
+    goalId: string,
+    recurrencePattern: string,
+    tools: Tool[] = []
+  ): void {
+    // Clear any existing timer for this goal
+    this.clearRecurringGoalTimer(goalId);
+    
+    // Parse the recurrence pattern to get the interval in milliseconds
+    const intervalMs = this.parseRecurrenceInterval(recurrencePattern);
+    if (!intervalMs) {
+      this.logger.warn(`Unrecognized recurrence pattern: ${recurrencePattern}`);
+      return;
+    }
+    
+    this.logger.info(`Setting up recurring goal ${goalId} to run ${recurrencePattern} (${intervalMs}ms)`);
+    
+    // Set up the timer
+    const timer = setInterval(async () => {
+      try {
+        // Check if the goal is already running
+        if (this.activeGoals.has(goalId)) {
+          this.logger.info(`Skipping scheduled run of goal ${goalId} as it's already running`);
+          return;
+        }
+        
+        const goal = this.goalPlanner?.getGoal(goalId);
+        if (!goal) {
+          this.logger.warn(`Recurring goal ${goalId} not found, removing timer`);
+          this.clearRecurringGoalTimer(goalId);
+          return;
+        }
+        
+        this.logger.info(`Executing recurring goal: ${goal.description}`);
+        
+        // Queue the goal execution
+        this.queueOperation(async () => {
+          try {
+            // Reset the goal state if needed
+            await this.resetRecurringGoal(goalId);
+            
+            // Execute the goal
+            await this.executeGoal(goalId, {
+              tools: tools
+            });
+          } catch (error) {
+            this.logger.error(`Error executing recurring goal ${goalId}`, error);
+          }
+        });
+      } catch (error) {
+        this.logger.error(`Error scheduling recurring goal ${goalId}`, error);
+      }
+    }, intervalMs);
+    
+    // Store the timer
+    this.recurringGoalTimers.set(goalId, timer);
+  }
+  
+  /**
+   * Clear a recurring goal timer
+   * 
+   * @param goalId - ID of the goal
+   */
+  private clearRecurringGoalTimer(goalId: string): void {
+    const timer = this.recurringGoalTimers.get(goalId);
+    if (timer) {
+      clearInterval(timer);
+      this.recurringGoalTimers.delete(goalId);
+    }
+  }
+  
+  /**
+   * Parse a recurrence pattern into milliseconds
+   * 
+   * @param pattern - Recurrence pattern string
+   * @returns Milliseconds interval or null if invalid
+   */
+  private parseRecurrenceInterval(pattern: string): number | null {
+    // Pattern examples: "every 6 hours", "daily", "every 30 minutes", "hourly"
+    const timeUnitMs = {
+      minute: 60 * 1000,
+      minutes: 60 * 1000,
+      hour: 60 * 60 * 1000,
+      hours: 60 * 60 * 1000,
+      day: 24 * 60 * 60 * 1000,
+      days: 24 * 60 * 60 * 1000,
+      week: 7 * 24 * 60 * 60 * 1000,
+      weeks: 7 * 24 * 60 * 60 * 1000
+    };
+    
+    // Check for hourly/daily/weekly patterns
+    if (pattern.toLowerCase() === 'hourly') {
+      return timeUnitMs.hour;
+    } else if (pattern.toLowerCase() === 'daily') {
+      return timeUnitMs.day;
+    } else if (pattern.toLowerCase() === 'weekly') {
+      return timeUnitMs.week;
+    }
+    
+    // Check for "every X units" pattern
+    const match = pattern.match(/every\s+(\d+)\s+([a-z]+)/i);
+    if (match) {
+      const quantity = parseInt(match[1]);
+      const unit = match[2].toLowerCase();
+      
+      if (timeUnitMs[unit as keyof typeof timeUnitMs]) {
+        return quantity * timeUnitMs[unit as keyof typeof timeUnitMs];
+      }
+    }
+    
+    return null;
+  }
+  
+  /**
+   * Reset a recurring goal for its next execution
+   * 
+   * @param goalId - ID of the goal to reset
+   */
+  private async resetRecurringGoal(goalId: string): Promise<void> {
+    if (!this.goalPlanner) return;
+    
+    const goal = this.goalPlanner.getGoal(goalId);
+    if (!goal) return;
+    
+    this.logger.info(`Resetting recurring goal: ${goal.description}`);
+    
+    // Get all sub-goals and tasks
+    const subGoals = this.goalPlanner.getSubGoals(goalId);
+    
+    // Reset the status of the goal and its sub-goals
+    goal.status = GoalStatus.PENDING;
+    goal.updatedAt = new Date();
+    
+    // Reset all sub-goals
+    for (const subGoal of subGoals) {
+      subGoal.status = GoalStatus.PENDING;
+      subGoal.updatedAt = new Date();
+    }
+    
+    // Save if persistence is enabled
+    if (this.config.goalPlanning?.persistGoals && this.goalsFilePath) {
+      this.saveGoals();
+    }
+  }
+  
+  /**
+   * Save goals to disk
+   */
+  private saveGoals(): void {
+    if (!this.goalPlanner || !this.goalsFilePath) return;
+    
+    try {
+      // Get all goals and tasks
+      const goals = this.goalPlanner.getGoals();
+      const tasks = this.goalPlanner.getTasks();
+      
+      // Prepare data to save
+      const data = {
+        goals,
+        tasks,
+        recurringGoals: Array.from(this.recurringGoalTimers.keys())
+      };
+      
+      // Write to file
+      fs.writeFileSync(this.goalsFilePath, JSON.stringify(data, null, 2));
+      this.logger.debug(`Saved ${goals.length} goals and ${tasks.length} tasks to ${this.goalsFilePath}`);
+    } catch (error) {
+      this.logger.error('Failed to save goals', error);
+    }
+  }
+  
+  /**
+   * Load goals from disk
+   */
+  private loadGoals(): void {
+    if (!this.goalPlanner || !this.goalsFilePath) return;
+    
+    try {
+      // Check if file exists
+      if (!fs.existsSync(this.goalsFilePath)) {
+        this.logger.debug(`No goals file found at ${this.goalsFilePath}`);
+        return;
+      }
+      
+      // Read and parse file
+      const data = JSON.parse(fs.readFileSync(this.goalsFilePath, 'utf-8'));
+      
+      // For now, just log that we found saved goals
+      // Full implementation would require directly manipulating goal planner's internal maps
+      this.logger.debug(`Found ${data.goals?.length || 0} saved goals in ${this.goalsFilePath}`);
+      
+      // Restore recurring goal timers
+      if (data.recurringGoals && Array.isArray(data.recurringGoals)) {
+        for (const goalId of data.recurringGoals) {
+          const goal = data.goals.find((g: any) => g.id === goalId);
+          if (goal && goal.recurrence) {
+            // Re-setup the timer (without tools for now as we can't serialize them)
+            this.setupRecurringGoal(goalId, goal.recurrence, []);
+          }
+        }
+      }
+    } catch (error) {
+      this.logger.error('Failed to load goals', error);
+    }
+  }
+  
+  /**
+   * Gets all goals
+   * 
+   * @returns Array of all goals
+   */
+  public getGoals(): Goal[] {
+    if (!this.goalPlanner) {
+      return [];
+    }
+    return this.goalPlanner.getGoals();
+  }
+  
+  /**
+   * Gets a specific goal
+   * 
+   * @param goalId - ID of the goal
+   * @returns The goal or undefined if not found
+   */
+  public getGoal(goalId: string): Goal | undefined {
+    if (!this.goalPlanner) {
+      return undefined;
+    }
+    return this.goalPlanner.getGoal(goalId);
+  }
+  
+  /**
+   * Cancels a goal
+   * 
+   * @param goalId - ID of the goal to cancel
+   * @returns Whether the goal was successfully cancelled
+   */
+  public cancelGoal(goalId: string): boolean {
+    if (!this.goalPlanner) {
+      return false;
+    }
+    
+    const goal = this.goalPlanner.getGoal(goalId);
+    if (!goal) return false;
+    
+    this.logger.info(`Cancelling goal: ${goal.description}`);
+    
+    // Clear recurring timer if any
+    this.clearRecurringGoalTimer(goalId);
+    
+    // Update the status
+    goal.status = GoalStatus.CANCELLED;
+    goal.updatedAt = new Date();
+    
+    // Persist if enabled
+    if (this.config.goalPlanning?.persistGoals && this.goalsFilePath) {
+      this.saveGoals();
+    }
+    
+    return true;
   }
 }

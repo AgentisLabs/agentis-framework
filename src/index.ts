@@ -82,10 +82,22 @@ export {
   DependencyGraph,
   TaskInfoFlow 
 } from './planning/dependency-inference';
+export {
+  GoalPlanner,
+  GoalType,
+  GoalStatus,
+  Goal,
+  GoalTask,
+  GoalResult,
+  GoalPlannerConfig
+} from './planning/goal-planner';
+
+export { RunGoalOptions } from './core/autonomous-agent';
 
 // Tools
 export { ToolRegistry } from './tools/tool-registry';
 export { WebSearchTool } from './tools/web-search-tool';
+export { BraveSearchTool } from './tools/brave-search-tool';
 export { TavilySearchTool } from './tools/tavily-search-tool';
 export { WeatherTool } from './tools/weather-tool';
 export { CoinGeckoPriceTool } from './tools/coingecko-price-tool';
