@@ -43,7 +43,7 @@ debug/
 
 
 
-!examples/discord-researcher-bot.ts
+!examples/discord-crypto-researcher-bot.ts
 
 examples/crypto-twitter-direct-agent.ts
 
@@ -51,6 +51,13 @@ examples/discord-bot-simple.ts
 examples/discord-bot.ts
 examples/price-checker.ts
 examples/discord-researcher-bot.ts
+examples/wexley-autonomous-agent.ts
+examples/enhanced-crypto-swarm.ts
+examples/discord-agent-swarm.ts
+examples/gpt4o-mini-example.ts
+examples/crypto-research-swarm.ts
+
+
 
 examples/crypto-price-checker.ts
 
