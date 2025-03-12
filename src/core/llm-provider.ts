@@ -80,13 +80,17 @@ export class AnthropicProvider implements LLMProviderInterface {
       }));
       
       // Add type property to match Anthropic's expected format
-      tools = tools.map(tool => ({
-        ...tool,
-        input_schema: {
-          ...tool.input_schema,
-          type: tool.input_schema.type || 'object'
-        }
-      }));
+      tools = tools.map(tool => {
+        // Ensure input_schema is an object before trying to access its properties
+        const inputSchema = tool.input_schema || {};
+        return {
+          ...tool,
+          input_schema: {
+            ...inputSchema,
+            type: (inputSchema.type) || 'object'
+          }
+        };
+      });
     }
     
     try {

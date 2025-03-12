@@ -18,7 +18,10 @@
     "example": "ts-node examples/discord-crypto-researcher-bot.ts",
     "test-kb": "ts-node scripts/test-knowledge-chunks.ts",
     "test-brave": "ts-node scripts/test-brave-search.ts",
-    "goal-agent": "ts-node examples/autonomous-goal-agent.ts"
+    "goal-agent": "ts-node examples/autonomous-goal-agent.ts",
+    "integrated-mcp": "ts-node examples/integrated-mcp-example.ts",
+    "weather-agent": "ts-node examples/claude-weather-mcp-agent.ts",
+    "direct-mcp": "ts-node examples/direct-mcp-client.ts"
   },
   "keywords": [
     "ai",
@@ -46,6 +49,7 @@
   "license": "MIT",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.38.0",
+    "@modelcontextprotocol/sdk": "^1.7.0",
     "@pinecone-database/pinecone": "^5.0.2",
     "@tavily/core": "^0.3.1",
     "@types/node": "^22.13.5",
@@ -65,9 +69,9 @@
     "@types/node-fetch": "^2.6.4",
     "@types/puppeteer": "^5.4.7",
     "@types/uuid": "^10.0.0",
-    "nodemon": "^3.1.9",
-    "tsconfig-paths": "^4.2.0", 
     "@typescript-eslint/eslint-plugin": "^6.0.0",
-    "@typescript-eslint/parser": "^6.0.0"
+    "@typescript-eslint/parser": "^6.0.0",
+    "nodemon": "^3.1.9",
+    "tsconfig-paths": "^4.2.0"
   }
 }

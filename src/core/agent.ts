@@ -18,6 +18,12 @@ import { PlannerInterface } from '../planning/planner-interface';
 import { DefaultPlanner } from '../planning/default-planner';
 import { createSystemPrompt } from '../utils/prompt-utils';
 import { Logger } from '../utils/logger';
+import * as crypto from 'crypto';
+
+/**
+ * Import MCP types (forward declaration to avoid circular dependencies)
+ */
+type MCPServer = any;
 
 /**
  * Core Agent class that serves as the foundation for AI agents in the framework
@@ -29,6 +35,7 @@ export class Agent extends EventEmitter {
   provider: LLMProviderInterface;
   planner?: PlannerInterface;
   logger: Logger;
+  mcpServers: MCPServer[] = [];
 
   /**
    * Creates a new Agent instance
@@ -86,6 +93,34 @@ export class Agent extends EventEmitter {
     this.planner = planner;
     return this;
   }
+  
+  /**
+   * Adds an MCP server to the agent
+   * 
+   * @param server - The MCP server to add
+   * @returns The agent instance (for chaining)
+   */
+  addMCPServer(server: MCPServer): Agent {
+    this.mcpServers.push(server);
+    this.logger.debug(`Added MCP server: ${server.name}`);
+    return this;
+  }
+  
+  /**
+   * Removes an MCP server from the agent
+   * 
+   * @param serverId - ID of the server to remove
+   * @returns The agent instance (for chaining)
+   */
+  removeMCPServer(serverId: string): Agent {
+    const index = this.mcpServers.findIndex(s => s.id === serverId);
+    if (index !== -1) {
+      const server = this.mcpServers[index];
+      this.mcpServers.splice(index, 1);
+      this.logger.debug(`Removed MCP server: ${server.name}`);
+    }
+    return this;
+  }
 
   /**
    * Runs the agent with a specific task
@@ -96,9 +131,15 @@ export class Agent extends EventEmitter {
   async run(options: RunOptions): Promise<RunResult> {
     this.logger.debug('Running agent', { task: options.task });
     
+    // Check if we should use MCP servers and if we have any connected
+    const useMcpServers = options.useMcpServers && this.mcpServers.length > 0;
+    if (options.useMcpServers && this.mcpServers.length === 0) {
+      this.logger.warn('useMcpServers flag set, but no MCP servers are connected. Falling back to standard tools.');
+    }
+    
     // Create or use provided conversation
     const conversation = options.conversation || {
-      id: uuidv4(),
+      id: crypto.randomUUID(),
       messages: [],
       created: Date.now(),
       updated: Date.now(),
@@ -223,10 +264,40 @@ export class Agent extends EventEmitter {
     // Call the LLM with available tools
     this.emit(AgentEvent.THINKING, { message: 'Processing...' });
     
+    // Prepare tools and MCP tools based on options
+    let allTools: any[] = options.tools || [];
+    let mcpToolsById: Map<string, {server: MCPServer, tool: any}> = new Map();
+    
+    // If MCP is enabled, add MCP tools
+    if (useMcpServers) {
+      this.logger.debug(`Using tools from ${this.mcpServers.length} MCP servers`);
+      
+      // Collect MCP tools from all servers
+      for (const server of this.mcpServers) {
+        // Skip if server is not connected or has no tools
+        if (!server.tools || server.tools.length === 0) {
+          this.logger.debug(`MCP server ${server.name} has no tools or is not connected`);
+          continue;
+        }
+        
+        this.logger.debug(`Adding ${server.tools.length} tools from MCP server: ${server.name}`);
+        
+        // Map tools to their source server for later use
+        for (const tool of server.tools) {
+          mcpToolsById.set(tool.name, {server, tool});
+        }
+        
+        // Add tools to the list of all tools
+        allTools = allTools.concat(server.tools);
+      }
+    }
+    
     // Log tools being passed to the model (for debugging)
-    if (options.tools && options.tools.length > 0) {
-      this.logger.debug('Passing tools to model:', options.tools.map(t => t.name));
-      this.emit(AgentEvent.THINKING, { message: `Available tools: ${options.tools.map(t => t.name).join(', ')}` });
+    if (allTools.length > 0) {
+      this.logger.debug('Passing tools to model:', allTools.map(t => t.name));
+      this.emit(AgentEvent.THINKING, { 
+        message: `Available tools: ${allTools.map(t => t.name).join(', ')}` 
+      });
     } else {
       this.logger.debug('No tools provided');
       this.emit(AgentEvent.THINKING, { message: 'No tools available' });
@@ -248,7 +319,7 @@ export class Agent extends EventEmitter {
     
     const result = await this.provider.generateResponse({
       messages: conversation.messages,
-      tools: options.tools || [],
+      tools: allTools,
       maxTokens: options.maxTokens,
       temperature: options.temperature,
       stream: options.stream,
@@ -299,52 +370,116 @@ export class Agent extends EventEmitter {
     if (result.toolCalls && result.toolCalls.length > 0) {
       this.logger.debug('Tool calls detected', { count: result.toolCalls.length });
       
-      // Get the tools mapped by name for easy lookup
-      const toolsMap = new Map();
+      // Get the standard tools mapped by name for easy lookup
+      const standardToolsMap = new Map();
       (options.tools || []).forEach(tool => {
-        toolsMap.set(tool.name, tool);
+        standardToolsMap.set(tool.name, tool);
       });
       
       // Execute each tool call
       const executedToolCalls = await Promise.all(
         result.toolCalls.map(async (tc) => {
-          const tool = toolsMap.get(tc.name);
+          // Check if it's an MCP tool
+          const mcpToolInfo = mcpToolsById.get(tc.name);
           
-          if (!tool) {
-            this.logger.warn(`Tool not found: ${tc.name}`);
-            return {
-              tool: tc.name,
-              params: tc.parameters,
-              result: { error: `Tool not found: ${tc.name}` }
-            };
-          }
-          
-          try {
-            // Execute the tool
-            this.emit(AgentEvent.TOOL_CALL, { 
-              tool: tc.name, 
-              params: tc.parameters 
-            });
+          if (mcpToolInfo) {
+            // Handle MCP tool call
+            try {
+              const { server } = mcpToolInfo;
+              
+              this.emit(AgentEvent.TOOL_CALL, { 
+                tool: tc.name, 
+                params: tc.parameters,
+                type: 'mcp'
+              });
+              
+              this.logger.debug(`Executing MCP tool: ${tc.name} on server: ${server.name}`, tc.parameters);
+              this.emit(AgentEvent.THINKING, { 
+                message: `Executing MCP tool: ${tc.name} with parameters: ${JSON.stringify(tc.parameters)}` 
+              });
+              
+              const result = await server.callTool({
+                name: tc.name,
+                arguments: tc.parameters
+              });
+              
+              // Format MCP result - match working example approach
+              let formattedResult = '';
+              
+              if (typeof result.content === 'string') {
+                formattedResult = result.content;
+              } else if (Array.isArray(result.content)) {
+                // MCP often returns content as an array of objects with type and text
+                formattedResult = result.content.map((item: any) => {
+                  if (item.type === 'text') {
+                    return item.text;
+                  }
+                  return '';
+                }).join('\n');
+              } else {
+                formattedResult = JSON.stringify(result.content);
+              }
+              
+              this.logger.debug(`MCP tool execution result:`, formattedResult);
+              
+              return {
+                tool: tc.name,
+                params: tc.parameters,
+                result: formattedResult 
+              };
+            } catch (error) {
+              this.logger.error(`Error executing MCP tool ${tc.name}`, error);
+              return {
+                tool: tc.name,
+                params: tc.parameters,
+                result: { error: error instanceof Error ? error.message : String(error) }
+              };
+            }
+          } else {
+            // Handle standard tool call
+            const tool = standardToolsMap.get(tc.name);
             
-            this.logger.debug(`Executing tool: ${tc.name}`, tc.parameters);
-            this.emit(AgentEvent.THINKING, { message: `Executing tool: ${tc.name} with parameters: ${JSON.stringify(tc.parameters)}` });
+            if (!tool) {
+              this.logger.warn(`Tool not found: ${tc.name}`);
+              return {
+                tool: tc.name,
+                params: tc.parameters,
+                result: { error: `Tool not found: ${tc.name}` }
+              };
+            }
             
-            const result = await tool.execute(tc.parameters);
-            this.logger.debug(`Tool execution result:`, result);
-            this.emit(AgentEvent.THINKING, { message: `Tool returned results (first result): ${result.results ? result.results[0]?.title : 'No results'}` });
-            
-            return {
-              tool: tc.name,
-              params: tc.parameters,
-              result
-            };
-          } catch (error) {
-            this.logger.error(`Error executing tool ${tc.name}`, error);
-            return {
-              tool: tc.name,
-              params: tc.parameters,
-              result: { error: error instanceof Error ? error.message : String(error) }
-            };
+            try {
+              // Execute the standard tool
+              this.emit(AgentEvent.TOOL_CALL, { 
+                tool: tc.name, 
+                params: tc.parameters,
+                type: 'standard'
+              });
+              
+              this.logger.debug(`Executing standard tool: ${tc.name}`, tc.parameters);
+              this.emit(AgentEvent.THINKING, { 
+                message: `Executing tool: ${tc.name} with parameters: ${JSON.stringify(tc.parameters)}` 
+              });
+              
+              const result = await tool.execute(tc.parameters);
+              this.logger.debug(`Tool execution result:`, result);
+              this.emit(AgentEvent.THINKING, { 
+                message: `Tool returned results (first result): ${result.results ? result.results[0]?.title : 'No results'}` 
+              });
+              
+              return {
+                tool: tc.name,
+                params: tc.parameters,
+                result
+              };
+            } catch (error) {
+              this.logger.error(`Error executing tool ${tc.name}`, error);
+              return {
+                tool: tc.name,
+                params: tc.parameters,
+                result: { error: error instanceof Error ? error.message : String(error) }
+              };
+            }
           }
         })
       );
@@ -353,13 +488,26 @@ export class Agent extends EventEmitter {
       
       // If we have tool calls, send their results back to the LLM
       if (toolCalls.length > 0) {
-        const toolResultsMessage: Message = {
-          role: 'user',
-          content: `Tool results:\n${JSON.stringify(toolCalls, null, 2)}`,
-          timestamp: Date.now()
-        };
-        
-        conversation.messages.push(toolResultsMessage);
+        // Add each tool result as a separate message - this better matches the working example
+        for (const toolCall of toolCalls) {
+          let content = '';
+          
+          if (typeof toolCall.result === 'string') {
+            // If result is a string (like from MCP tools), use it directly
+            content = toolCall.result;
+          } else {
+            // Otherwise format as JSON (like for standard tools)
+            content = `Tool results:\n${JSON.stringify(toolCall.result, null, 2)}`;
+          }
+          
+          const toolResultsMessage: Message = {
+            role: 'user',
+            content: content,
+            timestamp: Date.now()
+          };
+          
+          conversation.messages.push(toolResultsMessage);
+        }
         
         // Call the LLM again with the tool results
         this.logger.debug('Sending tool results back to LLM for final response');

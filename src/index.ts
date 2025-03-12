@@ -125,6 +125,9 @@ export { ConfigManager } from './config/config-manager';
 // Utils
 export { Logger, LogLevel } from './utils/logger';
 
+// MCP (Model Context Protocol)
+export { MCPServer, MCPServerConfig, MCPToolCall, MCPResult } from './mcp/mcp-server';
+
 /**
  * Simple example usage of the framework
  */

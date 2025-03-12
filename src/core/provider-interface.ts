@@ -45,7 +45,8 @@ export interface GenerateResult {
  */
 export enum ProviderType {
   ANTHROPIC = 'anthropic',
-  OPENAI = 'openai'
+  OPENAI = 'openai',
+  MCP = 'mcp'
 }
 
 /**

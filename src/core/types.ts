@@ -76,6 +76,7 @@ export interface Tool {
 export interface RunOptions {
   task: string;
   tools?: Tool[];
+  useMcpServers?: boolean; // Flag to indicate MCP servers should be used
   conversation?: Conversation;
   maxTokens?: number;
   temperature?: number;

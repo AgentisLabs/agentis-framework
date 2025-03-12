@@ -44,6 +44,9 @@ debug/
 
 
 !examples/discord-crypto-researcher-bot.ts
+!examples/direct-mcp-client.ts
+!examples/integrated-mcp-example.ts
+!examples/claude-weather-mcp-agent.ts
 
 examples/crypto-twitter-direct-agent.ts
 
@@ -72,6 +75,9 @@ tavily.md
 CLAUDE.md
 *.md
 
+# MCP example folder
+mcp-example/
+
 
 
 # Markdown files
@@ -81,4 +87,5 @@ CLAUDE.md
 !LICENSE
 !CHANGELOG.md
 !CONTRIBUTING.md
+!MCP-README.md
 
